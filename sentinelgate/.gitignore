@@ -1,0 +1,9 @@
+# Local Lobster Trap binaries per-platform.
+# Note: commit the Linux binary to repo for Streamlit Cloud deployment
+bin/lobstertrap-*
+
+# SQLite audit DB and Python caches
+sentinelgate.db
+__pycache__/
+*.pyc
+.env
