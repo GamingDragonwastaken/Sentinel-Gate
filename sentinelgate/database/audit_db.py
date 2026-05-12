@@ -13,11 +13,12 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "sentinelgate.db"
 
-_SCHEMA = """
+_AUDIT_SCHEMA = """
 CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     timestamp TEXT,
     session_id TEXT,
+    agent_id TEXT,
     prompt_hash TEXT,
     prompt_preview TEXT,
     risk_score REAL,
@@ -33,6 +34,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 """
 
+_POLICIES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS policies (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    natural_language TEXT,
+    enforcement_keywords TEXT,
+    severity TEXT,
+    created_at TEXT,
+    active INTEGER
+);
+"""
+
 
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(str(DB_PATH))
@@ -41,9 +54,17 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Create the audit_log table if it does not already exist."""
+    """Create the audit_log and policies tables if they do not already exist.
+
+    Also performs an idempotent ALTER for older DB files that predate the
+    `agent_id` column.
+    """
     with _connect() as conn:
-        conn.execute(_SCHEMA)
+        conn.execute(_AUDIT_SCHEMA)
+        conn.execute(_POLICIES_SCHEMA)
+        existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(audit_log)").fetchall()}
+        if "agent_id" not in existing_cols:
+            conn.execute("ALTER TABLE audit_log ADD COLUMN agent_id TEXT")
         conn.commit()
 
 
@@ -62,6 +83,7 @@ def log_request(data: dict) -> str:
         row_id,
         data.get("timestamp", datetime.utcnow().isoformat()),
         data.get("session_id"),
+        data.get("agent_id"),
         data.get("prompt_hash"),
         data.get("prompt_preview"),
         data.get("risk_score"),
@@ -80,11 +102,11 @@ def log_request(data: dict) -> str:
         conn.execute(
             """
             INSERT INTO audit_log (
-                id, timestamp, session_id, prompt_hash, prompt_preview,
+                id, timestamp, session_id, agent_id, prompt_hash, prompt_preview,
                 risk_score, intent_label, intent_description, flags,
                 decision, policy_violated, policy_name, policy_explanation,
                 response_preview, processing_time_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             payload,
         )
@@ -133,6 +155,88 @@ def get_stats() -> dict:
         "blocked": row["blocked"] or 0,
         "avg_risk_score": row["avg_risk_score"] or 0.0,
     }
+
+
+# ---------------------------------------------------------------------------
+# Policies table — low-level row I/O. Business logic lives in security/policies.py.
+# ---------------------------------------------------------------------------
+
+def insert_policy_row(row: dict) -> None:
+    """Insert a single policy row. `enforcement_keywords` may be a list (auto-JSON)."""
+    keywords = row.get("enforcement_keywords", [])
+    if isinstance(keywords, (list, dict)):
+        keywords = json.dumps(keywords)
+
+    payload = (
+        row["id"],
+        row.get("name"),
+        row.get("natural_language"),
+        keywords,
+        row.get("severity"),
+        row.get("created_at", datetime.utcnow().isoformat()),
+        int(row.get("active", 1)),
+    )
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO policies
+                (id, name, natural_language, enforcement_keywords,
+                 severity, created_at, active)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            payload,
+        )
+        conn.commit()
+
+
+def fetch_policies_rows(active_only: bool = True) -> list[dict]:
+    """Return policy rows as dicts; `enforcement_keywords` is JSON-decoded."""
+    sql = "SELECT * FROM policies"
+    if active_only:
+        sql += " WHERE active = 1"
+    sql += " ORDER BY created_at ASC"
+
+    with _connect() as conn:
+        rows = conn.execute(sql).fetchall()
+
+    results = []
+    for row in rows:
+        record = dict(row)
+        if record.get("enforcement_keywords"):
+            try:
+                record["enforcement_keywords"] = json.loads(record["enforcement_keywords"])
+            except (ValueError, TypeError):
+                record["enforcement_keywords"] = []
+        else:
+            record["enforcement_keywords"] = []
+        record["active"] = bool(record.get("active", 0))
+        results.append(record)
+    return results
+
+
+def update_policy_active(policy_id: str, active: bool) -> bool:
+    """Flip a policy's active flag; returns True if a row was updated."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE policies SET active = ? WHERE id = ?",
+            (1 if active else 0, policy_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def delete_policy_row(policy_id: str) -> bool:
+    """Delete a policy by id; returns True if a row was removed."""
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM policies WHERE id = ?", (policy_id,))
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def count_policies() -> int:
+    with _connect() as conn:
+        (n,) = conn.execute("SELECT COUNT(*) FROM policies").fetchone()
+        return int(n)
 
 
 init_db()

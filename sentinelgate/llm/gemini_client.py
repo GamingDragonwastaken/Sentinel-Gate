@@ -1,9 +1,11 @@
 """Thin wrapper around Google's Gemini Flash model.
 
-Exposes two helpers:
-- `call_gemini` for free-text completion
+Exposes three helpers:
+- `call_gemini` for free-text completion (native Gemini SDK)
 - `call_gemini_json` for structured (JSON-mode) responses used by the
-  inspector / risk-scorer / policy engine.
+  inspector / risk-scorer / policy engine
+- `call_gemini_via_lobster` for completion routed through the Lobster Trap
+  proxy so traffic gets DPI'd both ways
 """
 
 import json
@@ -13,6 +15,8 @@ import re
 import google.generativeai as genai
 
 MODEL_NAME = "gemini-2.5-flash"
+LOBSTER_PORT = int(os.getenv("LOBSTER_PORT", "8765"))
+LOBSTER_BASE_URL = f"http://localhost:{LOBSTER_PORT}/v1"
 
 
 def _configure() -> str | None:
@@ -90,3 +94,48 @@ def call_gemini_json(prompt: str, system_prompt: str | None = None) -> dict:
         return _extract_json(raw)
     except (ValueError, TypeError):
         return {"error": "parse_failed", "raw": raw}
+
+
+def call_gemini_via_lobster(
+    prompt: str,
+    system_prompt: str | None = None,
+) -> str:
+    """Route a Gemini call through the Lobster Trap proxy.
+
+    Uses the OpenAI client pointed at the local Lobster Trap listener;
+    Lobster proxies upstream to Gemini's OpenAI-compatible endpoint and
+    performs ingress/egress DPI on the traffic in both directions.
+
+    Falls back to `call_gemini()` if Lobster Trap isn't reachable
+    (connection refused / not running) so the gateway stays usable.
+    """
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return (
+            "[gemini_error] Missing API key. Set GEMINI_API_KEY (or "
+            "GOOGLE_API_KEY) in your environment/.env and retry."
+        )
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return call_gemini(prompt, system_prompt=system_prompt)
+
+    messages: list[dict] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    try:
+        client = OpenAI(base_url=LOBSTER_BASE_URL, api_key=api_key, timeout=15.0)
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+        )
+        choice = completion.choices[0]
+        return (choice.message.content or "").strip()
+    except Exception as exc:
+        text = str(exc)
+        if any(s in text.lower() for s in ("connection refused", "connect call failed", "max retries")):
+            return call_gemini(prompt, system_prompt=system_prompt)
+        return _format_exception(exc)

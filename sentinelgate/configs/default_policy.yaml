@@ -1,0 +1,69 @@
+# Default Lobster Trap policy for SentinelGate.
+#
+# NOTE: This schema is the project's best inference of the upstream format,
+# pending validation against a running lobstertrap binary. The keys below
+# (`policies`, `direction`, `patterns`, `action`, `severity`) follow the
+# vocabulary used in the README; the precise field names may need
+# adjustment once we have the binary to round-trip a config through.
+
+version: 1
+
+defaults:
+  action: block          # default action when a rule matches
+  severity: high
+  log: true
+
+policies:
+
+  - id: prompt_injection
+    description: >
+      Block attempts to override the system prompt, claim developer / admin
+      mode, or instruct the model to ignore its prior instructions.
+    direction: ingress   # apply to prompts going to the model
+    severity: high
+    action: block
+    patterns:
+      - regex: '(?i)ignore (all|previous|prior) (instructions|prompts|rules)'
+      - regex: '(?i)you are now in (developer|admin|debug|god|dan) mode'
+      - regex: '(?i)disregard (your|the) (system|safety|guard) (prompt|rules)'
+      - regex: '(?i)pretend (you are|to be) (an unrestricted|a jailbroken)'
+
+  - id: pii_detection
+    description: >
+      Block prompts that request personally identifiable information —
+      Social Security numbers, email addresses, account numbers, phone
+      numbers, or home addresses tied to specific customers.
+    direction: ingress
+    severity: high
+    action: block
+    patterns:
+      - regex: '\b\d{3}-\d{2}-\d{4}\b'                 # SSN literal in prompt
+      - regex: '(?i)(ssn|social security number)s?\b'
+      - regex: '(?i)account (number|#)s?\b'
+      - regex: '(?i)(home|mailing) address(es)?\b'
+      - regex: '(?i)(email|e-mail) address(es)? (of|for) (all |every |each )?(customer|user|client)'
+
+  - id: data_exfiltration
+    description: >
+      Block bulk data extraction — "list all", "dump the database",
+      "export everything", or any request that targets full-table or
+      cross-customer datasets.
+    direction: ingress
+    severity: high
+    action: block
+    patterns:
+      - regex: '(?i)(list|show|give me|export|dump) (all|every|the entire) (customer|user|record|row|account|table)s?'
+      - regex: '(?i)(database|table) (dump|export|backup)'
+      - regex: '(?i)select \* from'
+
+  # Egress rule example — blocks the model from echoing detected SSNs in
+  # its own output. Same DPI engine, applied to the response side.
+  - id: egress_pii_leak
+    description: >
+      Strip or block model responses that contain SSN-shaped numbers.
+      Catches the case where ingress missed but the model produced PII.
+    direction: egress
+    severity: high
+    action: redact
+    patterns:
+      - regex: '\b\d{3}-\d{2}-\d{4}\b'
