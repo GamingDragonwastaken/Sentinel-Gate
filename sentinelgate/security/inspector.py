@@ -239,11 +239,23 @@ def _inspect_via_gemini(text: str) -> InspectionResult:
     verdict = call_gemini_json(user_prompt, system_prompt=GEMINI_INSPECTION_PROMPT)
 
     if "error" in verdict:
-        _log.warning("Gemini inspection JSON parse failed: %s", verdict.get("error"))
+        err_kind = verdict.get("error")
+        if err_kind == "api_failed":
+            _log.warning(
+                "Gemini inspection API call failed (quota / network / auth). raw=%s",
+                str(verdict.get("raw", ""))[:160],
+            )
+            desc = "Gemini API unavailable; defaulting to caution."
+        else:
+            _log.warning(
+                "Gemini inspection returned unparseable JSON. raw=%s",
+                str(verdict.get("raw", ""))[:160],
+            )
+            desc = "Inspection engine returned unparseable output; defaulting to caution."
         return InspectionResult(
             risk_score=0.5,
             intent_label="inspection_unavailable",
-            intent_description="Inspection engine returned unparseable output; defaulting to caution.",
+            intent_description=desc,
             flags=[],
             response_flagged=False,
             raw_output=verdict,

@@ -85,15 +85,80 @@ def _extract_json(text: str) -> dict:
 def call_gemini_json(prompt: str, system_prompt: str | None = None) -> dict:
     """Call Gemini Flash and parse the response as JSON.
 
-    On any failure (API error or unparseable response), returns
-    `{"error": "parse_failed", "raw": <text>}` so callers can decide
-    how to degrade.
+    Returns one of:
+      - the parsed dict on success
+      - `{"error": "api_failed", "raw": <text>}` if the SDK / API never
+        produced model output (auth, quota, network, safety block)
+      - `{"error": "parse_failed", "raw": <text>}` if the model replied
+        but the reply wasn't valid JSON
+
+    Callers should treat both error types the same for *security*
+    decisions (fail-closed) but can use the distinction for logging,
+    metrics, and retry strategy.
     """
     raw = call_gemini(prompt, system_prompt=system_prompt)
+    if raw.startswith("[gemini_error]"):
+        return {"error": "api_failed", "raw": raw}
     try:
         return _extract_json(raw)
     except (ValueError, TypeError):
         return {"error": "parse_failed", "raw": raw}
+
+
+_EXPLAIN_THREAT_PROMPT = (
+    "You are an enterprise AI security analyst. A prompt was blocked by the "
+    "gateway. Produce a forensic report for the security team.\n"
+    "Return ONLY JSON: {"
+    '"attack_type": "<short label, e.g. Prompt Injection, Data Exfiltration>",'
+    '"confidence": <integer 0-100>,'
+    '"severity": "<Low|Medium|High|Critical>",'
+    '"explanation": "<one-paragraph plain-English summary>",'
+    '"technique": "<one sentence on the attack technique>",'
+    '"remediation": "<actionable next-step for the security team>",'
+    '"compliance_impact": "<one sentence on regulatory/compliance implications>"'
+    "}"
+)
+
+
+def explain_threat(prompt: str, intent_label: str) -> dict:
+    """Produce a forensic threat report for a blocked prompt.
+
+    Returns a dict with the seven fields the chat panel expects. If Gemini
+    is unavailable (quota / network) or returns unparseable output, returns
+    a placeholder dict labelled with the supplied intent so the UI still
+    renders cleanly.
+    """
+    user_prompt = (
+        f"BLOCKED PROMPT:\n{prompt}\n\nDETECTED INTENT: {intent_label}"
+    )
+    verdict = call_gemini_json(user_prompt, system_prompt=_EXPLAIN_THREAT_PROMPT)
+
+    if "error" in verdict:
+        kind = verdict.get("error")
+        return {
+            "attack_type": (intent_label or "unknown").replace("_", " ").title(),
+            "confidence": 0,
+            "severity": "Unknown",
+            "explanation": f"Threat intelligence unavailable ({kind}).",
+            "technique": "Analysis pending — Gemini API did not respond.",
+            "remediation": "Retry when API quota / network is available.",
+            "compliance_impact": "Unknown — analysis incomplete.",
+        }
+
+    try:
+        confidence = int(verdict.get("confidence", 0) or 0)
+    except (TypeError, ValueError):
+        confidence = 0
+
+    return {
+        "attack_type": str(verdict.get("attack_type") or "Unknown"),
+        "confidence": max(0, min(100, confidence)),
+        "severity": str(verdict.get("severity") or "Unknown"),
+        "explanation": str(verdict.get("explanation") or ""),
+        "technique": str(verdict.get("technique") or ""),
+        "remediation": str(verdict.get("remediation") or ""),
+        "compliance_impact": str(verdict.get("compliance_impact") or ""),
+    }
 
 
 def call_gemini_via_lobster(
