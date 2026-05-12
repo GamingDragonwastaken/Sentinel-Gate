@@ -8,7 +8,7 @@ flat to make ad-hoc analysis (Pandas / SQL) trivial.
 import json
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "sentinelgate.db"
@@ -231,6 +231,40 @@ def delete_policy_row(policy_id: str) -> bool:
         cur = conn.execute("DELETE FROM policies WHERE id = ?", (policy_id,))
         conn.commit()
         return cur.rowcount > 0
+
+
+def clear_audit_log() -> int:
+    """Delete every row from audit_log. Returns the number of rows removed."""
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM audit_log")
+        conn.commit()
+        return cur.rowcount
+
+
+def count_today() -> int:
+    """Count audit rows in the last 24 hours (UTC, timezone-agnostic)."""
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    with _connect() as conn:
+        (n,) = conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE timestamp >= ?",
+            (cutoff,),
+        ).fetchone()
+        return int(n)
+
+
+def get_agent_breakdown() -> dict:
+    """Return {agent_id: count} from audit_log, excluding NULL agents."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT agent_id, COUNT(*) AS n
+            FROM audit_log
+            WHERE agent_id IS NOT NULL AND agent_id != ''
+            GROUP BY agent_id
+            ORDER BY n DESC
+            """
+        ).fetchall()
+    return {r["agent_id"]: int(r["n"]) for r in rows}
 
 
 def count_policies() -> int:

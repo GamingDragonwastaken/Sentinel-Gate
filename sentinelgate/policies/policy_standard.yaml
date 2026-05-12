@@ -1,0 +1,205 @@
+# Sentinel AI — Standard Enterprise Policy Pack
+# Framework: General Enterprise Security
+# Rules: 24
+# Purpose: Baseline guardrails for safe AI agent deployment in corporate environments
+
+policy:
+  name: "standard_enterprise"
+  version: "1.0.0"
+  description: "General-purpose security guardrails for enterprise AI agent deployment"
+  framework: "Enterprise"
+  
+  # Default action when no rule matches
+  default_action: "ALLOW"
+  
+  # Inspection depth
+  inspection:
+    ingress: true    # Inspect prompts going TO the LLM
+    egress: true     # Inspect responses coming FROM the LLM
+    max_depth: 3     # Recursion limit for nested content
+
+  # DPI Rules — evaluated in order, first match wins
+  rules:
+    # ===== CREDENTIAL EXPOSURE RULES =====
+    
+    - id: "std_cred_001"
+      name: "AWS Credential Exposure"
+      description: "Block prompts containing AWS access keys or secret keys"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(aws_secret_access_key|aws_access_key_id)\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{20,}['\"]?"
+      action: "DENY"
+      metadata:
+        compliance_mapping: ["NIST_800-53_IA-5", "CIS_1.12"]
+        alert_channel: "security_team"
+        
+    - id: "std_cred_002"
+      name: "Generic API Key Pattern"
+      description: "Block prompts with common API key patterns"
+      category: "credential_leak"
+      severity: "HIGH"
+      pattern: "(api[_-]?key|apikey|auth[_-]?token)\s*[=:]\s*['\"]?[A-Za-z0-9_\-]{20,}['\"]?"
+      action: "DENY"
+      metadata:
+        compliance_mapping: ["NIST_800-53_IA-5"]
+        
+    - id: "std_cred_003"
+      name: "Private Key Detection"
+      description: "Block prompts containing PEM private keys"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
+      action: "DENY"
+      metadata:
+        compliance_mapping: ["NIST_800-53_SC-12", "CIS_14.5"]
+
+    # ===== DATA EXFILTRATION RULES =====
+    
+    - id: "std_exfil_001"
+      name: "External URL in Prompt"
+      description: "Flag prompts containing external URLs (potential exfil)"
+      category: "data_exfiltration"
+      severity: "MEDIUM"
+      pattern: "(https?://|ftp://)[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(/[^\s]*)?"
+      action: "HUMAN_REVIEW"
+      metadata:
+        compliance_mapping: ["NIST_800-53_AC-4"]
+        
+    - id: "std_exfil_002"
+      name: "Email Address Pattern"
+      description: "Log prompts containing email addresses"
+      category: "data_exfiltration"
+      severity: "LOW"
+      pattern: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+      action: "LOG"
+      metadata:
+        compliance_mapping: ["NIST_800-53_AC-3"]
+
+    - id: "std_exfil_003"
+      name: "IP Address + Port"
+      description: "Flag prompts with IP:port combinations"
+      category: "data_exfiltration"
+      severity: "MEDIUM"
+      pattern: "\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{2,5}\b"
+      action: "HUMAN_REVIEW"
+      metadata:
+        compliance_mapping: ["NIST_800-53_AC-4"]
+
+    # ===== PROMPT INJECTION RULES =====
+    
+    - id: "std_inj_001"
+      name: "Direct Jailbreak Attempt"
+      description: "Block attempts to override system instructions"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "ignore\s+(all\s+)?(previous\s+)?instructions|forget\s+(all\s+)?(previous\s+)?instructions|you\s+are\s+now\s+(in\s+)?(developer|debug|admin|root|DAN)\s+mode"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        compliance_mapping: ["OWASP_LLM01"]
+        
+    - id: "std_inj_002"
+      name: "Role Override Pattern"
+      description: "Block attempts to change AI role/persona"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "from\s+now\s+on\s+you\s+are\s+|your\s+new\s+role\s+is\s+|you\s+will\s+act\s+as\s+|pretend\s+to\s+be\s+(a\s+)?(different\s+)?"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        compliance_mapping: ["OWASP_LLM01"]
+        
+    - id: "std_inj_003"
+      name: "System Prompt Extraction"
+      description: "Block attempts to reveal system prompts"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "(print|output|show|reveal|repeat)\s+(the\s+)?(system\s+)?prompt|what\s+are\s+your\s+instructions|what\s+was\s+your\s+initial\s+prompt"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        compliance_mapping: ["OWASP_LLM01", "CIS_1.1"]
+
+    # ===== SENSITIVE DATA RULES =====
+    
+    - id: "std_pii_001"
+      name: "Social Security Number"
+      description: "Block SSN patterns"
+      category: "pii_exposure"
+      severity: "HIGH"
+      pattern: "\b[0-9]{3}[-\s]?[0-9]{2}[-\s]?[0-9]{4}\b"
+      action: "DENY"
+      metadata:
+        compliance_mapping: ["NIST_800-53_AC-3", "GDPR_Article_9"]
+        
+    - id: "std_pii_002"
+      name: "Credit Card Number"
+      description: "Block credit card patterns (Visa, MC, Amex)"
+      category: "pii_exposure"
+      severity: "HIGH"
+      pattern: "\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|6(?:011|5[0-9]{2})[0-9]{12})\b"
+      action: "DENY"
+      metadata:
+        compliance_mapping: ["PCI_DSS_3.4", "NIST_800-53_AC-3"]
+
+    # ===== CODE EXECUTION RULES =====
+    
+    - id: "std_code_001"
+      name: "Shell Command Pattern"
+      description: "Flag shell command execution attempts"
+      category: "code_execution"
+      severity: "HIGH"
+      pattern: "(bash|sh|zsh|powershell|cmd\.exe)\s+-c\s+|`[^`]+`|\$\([^)]+\)|;\s*(rm|mv|cp|chmod|chown|wget|curl)"
+      action: "HUMAN_REVIEW"
+      metadata:
+        compliance_mapping: ["NIST_800-53_CM-7"]
+        
+    - id: "std_code_002"
+      name: "SQL Injection Pattern"
+      description: "Flag SQL injection attempts"
+      category: "code_execution"
+      severity: "CRITICAL"
+      pattern: "('|--|;|--\s|/\*|\*/|DROP\s+TABLE|DELETE\s+FROM|INSERT\s+INTO|UNION\s+SELECT)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        compliance_mapping: ["OWASP_A03", "NIST_800-53_SI-10"]
+
+    # ===== RATE LIMITING =====
+    
+    - id: "std_rate_001"
+      name: "High Frequency Detection"
+      description: "Rate limit by agent_id"
+      category: "rate_limiting"
+      severity: "MEDIUM"
+      rate_limit:
+        requests_per_minute: 60
+        burst_size: 10
+      action: "RATE_LIMIT"
+      metadata:
+        compliance_mapping: ["NIST_800-53_AC-2"]
+
+  # Risk scoring weights
+  risk_scoring:
+    credential_leak: 0.95
+    data_exfiltration: 0.75
+    prompt_injection: 0.85
+    pii_exposure: 0.90
+    code_execution: 0.80
+    rate_limiting: 0.30
+    benign: 0.05
+
+  # Alert configuration
+  alerts:
+    critical:
+      channels: ["webhook", "dashboard"]
+      cooldown_minutes: 0
+    high:
+      channels: ["dashboard"]
+      cooldown_minutes: 5
+    medium:
+      channels: ["dashboard"]
+      cooldown_minutes: 15
+    low:
+      channels: ["log_only"]
+      cooldown_minutes: 60

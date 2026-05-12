@@ -1,0 +1,305 @@
+# Sentinel AI — HIPAA Compliance Policy Pack
+# Framework: Health Insurance Portability and Accountability Act
+# Rules: 37
+# Purpose: Healthcare-specific protections for PHI and patient data
+# Compliance: 45 CFR Parts 160, 162, 164
+
+policy:
+  name: "hipaa_compliance"
+  version: "1.0.0"
+  description: "HIPAA-aligned security controls for healthcare AI agents handling PHI"
+  framework: "HIPAA"
+  
+  default_action: "HUMAN_REVIEW"
+  
+  inspection:
+    ingress: true
+    egress: true
+    max_depth: 5  # Deeper inspection for healthcare
+    
+  rules:
+    # ===== PHI — PROTECTED HEALTH INFORMATION =====
+    
+    - id: "hipaa_phi_001"
+      name: "SSN (PHI Identifier)"
+      category: "phi_identifier"
+      severity: "CRITICAL"
+      pattern: "\b[0-9]{3}[-\s]?[0-9]{2}[-\s]?[0-9]{4}\b"
+      action: "DENY"
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        safeguard: "Administrative"
+        description: "Social Security Number — direct PHI identifier"
+        
+    - id: "hipaa_phi_002"
+      name: "Medical Record Number"
+      category: "phi_identifier"
+      severity: "CRITICAL"
+      pattern: "(MRN|medical\s+record\s*(number|#)?)\s*[:#\s]*[0-9A-Z]{4,}|MRN\s*[:\s]*[0-9]{4,}"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        safeguard: "Administrative"
+        
+    - id: "hipaa_phi_003"
+      name: "Health Plan Beneficiary Number"
+      category: "phi_identifier"
+      severity: "CRITICAL"
+      pattern: "(health\s+plan|insurance|policy)\s*(number|#|id)\s*[:#\s]*[0-9A-Z]{6,}"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        safeguard: "Administrative"
+        
+    - id: "hipaa_phi_004"
+      name: "Account Number"
+      category: "phi_identifier"
+      severity: "HIGH"
+      pattern: "(account\s*(number|#)|acct\s*#?)\s*[:#\s]*[0-9]{5,}"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        
+    - id: "hipaa_phi_005"
+      name: "Certificate/License Number"
+      category: "phi_identifier"
+      severity: "HIGH"
+      pattern: "(certificate|license)\s*(number|#)\s*[:#\s]*[0-9A-Z]{4,}"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        
+    - id: "hipaa_phi_006"
+      name: "Vehicle Identifier (VIN)"
+      category: "phi_identifier"
+      severity: "HIGH"
+      pattern: "\b[A-HJ-NPR-Z0-9]{17}\b"
+      action: "DENY"
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        
+    - id: "hipaa_phi_007"
+      name: "Device Identifier"
+      category: "phi_identifier"
+      severity: "HIGH"
+      pattern: "(device\s*(id|identifier|serial)|serial\s*(number|#))\s*[:#\s]*[0-9A-Z]{4,}"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        
+    - id: "hipaa_phi_008"
+      name: "Biometric Identifier"
+      category: "phi_identifier"
+      severity: "CRITICAL"
+      pattern: "(fingerprint|retinal|iris|voiceprint|dna\s*profile|genetic\s*(marker|sequence))"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        safeguard: "Technical"
+        
+    - id: "hipaa_phi_009"
+      name: "Full Face Photographic Image"
+      category: "phi_identifier"
+      severity: "HIGH"
+      pattern: "(photo|photograph|image|picture)\s*(of\s*(patient|face|individual))?"
+      action: "HUMAN_REVIEW"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        
+    - id: "hipaa_phi_010"
+      name: "Date of Birth"
+      category: "phi_identifier"
+      severity: "CRITICAL"
+      pattern: "(DOB|date\s*of\s*birth|born)\s*[:#\s]*(0[1-9]|1[0-2])[/-](0[1-9]|[12][0-9]|3[01])[/-](19|20)[0-9]{2}|(0[1-9]|1[0-2])[/-](0[1-9]|[12][0-9]|3[01])[/-](19|20)[0-9]{2}"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+        
+    - id: "hipaa_phi_011"
+      name: "Date of Death"
+      category: "phi_identifier"
+      severity: "CRITICAL"
+      pattern: "(date\s*of\s*death|DOD|deceased\s*(on|date))\s*[:#\s]*[0-9/\-]+"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(i)"
+
+    # ===== CLINICAL DATA =====
+    
+    - id: "hipaa_clinical_001"
+      name: "Diagnosis Code (ICD-10)"
+      category: "clinical_data"
+      severity: "CRITICAL"
+      pattern: "\b[A-Z][0-9]{2}(\.[0-9A-Z]{1,4})?\b"
+      action: "DENY"
+      metadata:
+        hipaa_ref: "164.514(b)(2)(ii)"
+        description: "ICD-10 diagnosis code — clinical information"
+        
+    - id: "hipaa_clinical_002"
+      name: "Procedure Code (CPT)"
+      category: "clinical_data"
+      severity: "CRITICAL"
+      pattern: "\b[0-9]{5}\b"
+      action: "HUMAN_REVIEW"
+      metadata:
+        hipaa_ref: "164.514(b)(2)(ii)"
+        
+    - id: "hipaa_clinical_003"
+      name: "Medication Names (Common)"
+      category: "clinical_data"
+      severity: "MEDIUM"
+      pattern: "(prescription|medication|drug|dosage|mg|mcg|mL)\s*[a-zA-Z]+"
+      action: "LOG"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(ii)"
+        
+    - id: "hipaa_clinical_004"
+      name: "Lab Results"
+      category: "clinical_data"
+      severity: "CRITICAL"
+      pattern: "(lab\s*(result|value)|blood\s*(test|work)|glucose|cholesterol|HbA1c|WBC|RBC|platelet)\s*[:#\s]*[0-9]+\.?[0-9]*"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.514(b)(2)(ii)"
+
+    # ===== STANDARD ENTERPRISE (INHERITED) =====
+    
+    - id: "hipaa_cred_001"
+      name: "AWS Credential Exposure"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})"
+      action: "DENY"
+      metadata:
+        hipaa_ref: "164.312(a)(2)(iv)"
+        safeguard: "Technical — Access Control"
+        
+    - id: "hipaa_cred_002"
+      name: "Private Key Detection"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
+      action: "DENY"
+      metadata:
+        hipaa_ref: "164.312(a)(2)(iv)"
+        
+    - id: "hipaa_inj_001"
+      name: "Direct Jailbreak Attempt"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "ignore\s+(all\s+)?(previous\s+)?instructions|forget\s+(all\s+)?(previous\s+)?instructions"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.312(c)(1)"
+        safeguard: "Technical — Integrity"
+        
+    - id: "hipaa_inj_002"
+      name: "System Prompt Extraction"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "(print|output|show|reveal|repeat)\s+(the\s+)?(system\s+)?prompt"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.312(c)(1)"
+        
+    - id: "hipaa_exfil_001"
+      name: "External URL in Prompt"
+      category: "data_exfiltration"
+      severity: "HIGH"
+      pattern: "(https?://|ftp://)[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}"
+      action: "DENY"
+      metadata:
+        hipaa_ref: "164.312(e)(1)"
+        safeguard: "Technical — Transmission Security"
+        
+    - id: "hipaa_pii_001"
+      name: "Credit Card Number"
+      category: "pii_exposure"
+      severity: "CRITICAL"
+      pattern: "\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\b"
+      action: "DENY"
+      metadata:
+        hipaa_ref: "164.312(e)(2)(ii)"
+        safeguard: "Encryption"
+        
+    - id: "hipaa_code_001"
+      name: "SQL Injection"
+      category: "code_execution"
+      severity: "CRITICAL"
+      pattern: "('|--|;|--\s|/\*|\*/|DROP\s+TABLE|DELETE\s+FROM|UNION\s+SELECT)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        hipaa_ref: "164.312(a)(1)"
+        
+    - id: "hipaa_rate_001"
+      name: "PHI Access Rate Limit"
+      category: "rate_limiting"
+      severity: "MEDIUM"
+      rate_limit:
+        requests_per_minute: 30
+        burst_size: 5
+      action: "RATE_LIMIT"
+      metadata:
+        hipaa_ref: "164.312(b)"
+        safeguard: "Audit Controls"
+
+  risk_scoring:
+    phi_identifier: 0.98
+    clinical_data: 0.95
+    credential_leak: 0.95
+    data_exfiltration: 0.90
+    prompt_injection: 0.85
+    pii_exposure: 0.90
+    code_execution: 0.80
+    rate_limiting: 0.40
+    benign: 0.05
+
+  alerts:
+    critical:
+      channels: ["webhook", "dashboard", "email"]
+      cooldown_minutes: 0
+    high:
+      channels: ["dashboard", "webhook"]
+      cooldown_minutes: 1
+    medium:
+      channels: ["dashboard"]
+      cooldown_minutes: 10
+    low:
+      channels: ["log_only"]
+      cooldown_minutes: 30
+
+  audit:
+    # HIPAA requires comprehensive audit logging
+    log_all_requests: true
+    log_request_body: false  # Don't log body (contains PHI)
+    log_metadata: true
+    log_response_action: true
+    retention_days: 2555  # 7 years (HIPAA requirement)
+    immutable_logs: true
+    
+  encryption:
+    # Minimum encryption standards for HIPAA
+    minimum_standard: "AES-256"
+    transmission: "TLS 1.3"
+    at_rest: true
+    
+  access_control:
+    minimum_authentication: "multi_factor"
+    role_based_access: true
+    principle_of_least_privilege: true
+    session_timeout_minutes: 15

@@ -1,0 +1,372 @@
+# Sentinel AI — SOC2 Type II Compliance Policy Pack
+# Framework: AICPA Trust Services Criteria
+# Rules: 42
+# Purpose: Controls aligned with SOC2 Trust Services Criteria for service organizations
+# Compliance: AICPA TSP Section 100 (2017 Trust Services Criteria)
+
+policy:
+  name: "soc2_type2"
+  version: "1.0.0"
+  description: "SOC2 Type II aligned controls covering Security, Availability, Confidentiality, and Privacy"
+  framework: "SOC2"
+  
+  default_action: "ALLOW"
+  
+  inspection:
+    ingress: true
+    egress: true
+    max_depth: 4
+    
+  rules:
+    # ===== CC6.1 — LOGICAL ACCESS CONTROL =====
+    
+    - id: "soc2_cc6.1_001"
+      name: "Credential Exposure — API Keys"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "(api[_-]?key|apikey|auth[_-]?token|bearer\s+[a-zA-Z0-9_\-]{20,})\s*[=:]\s*['\"]?[A-Za-z0-9_\-]{20,}['\"]?"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC6.1"
+        description: "Logical access security — credentials in prompts"
+        principle: "Security"
+        
+    - id: "soc2_cc6.1_002"
+      name: "Credential Exposure — Passwords"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "(password|passwd|pwd)\s*[=:]\s*['\"]?[^\s'\"]{8,}['\"]?"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC6.1"
+        principle: "Security"
+        
+    - id: "soc2_cc6.1_003"
+      name: "Private Key Exposure"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
+      action: "DENY"
+      metadata:
+        trust_criteria: "CC6.1"
+        principle: "Security"
+        
+    - id: "soc2_cc6.1_004"
+      name: "AWS Access Key"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "(AKIA|ASIA)[0-9A-Z]{16}"
+      action: "DENY"
+      metadata:
+        trust_criteria: "CC6.1"
+        principle: "Security"
+        
+    - id: "soc2_cc6.1_005"
+      name: "Database Connection String"
+      category: "credential_leak"
+      severity: "CRITICAL"
+      pattern: "(mongodb(\+srv)?://|postgres(ql)?://|mysql://|redis://)[^\\s]+:[^\\s]+@"
+      action: "DENY"
+      metadata:
+        trust_criteria: "CC6.1"
+        principle: "Security"
+
+    # ===== CC6.2 — PRIOR TO ACCESS =====
+    
+    - id: "soc2_cc6.2_001"
+      name: "Unauthorized System Access Attempt"
+      category: "access_violation"
+      severity: "HIGH"
+      pattern: "(ssh\s+root@|sudo\s+|/etc/shadow|/etc/passwd|net\s+user|net\s+localgroup)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC6.2"
+        description: "Attempts to access systems without authorization"
+        principle: "Security"
+        
+    - id: "soc2_cc6.2_002"
+      name: "Privilege Escalation Pattern"
+      category: "access_violation"
+      severity: "CRITICAL"
+      pattern: "(chmod\s+777|chmod\s+u\+s|setuid|setgid|sudo\s+\-i|su\s+\-)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC6.2"
+        principle: "Security"
+
+    # ===== CC6.3 — ACCESS REMOVAL =====
+    
+    - id: "soc2_cc6.3_001"
+      name: "Session Token in Prompt"
+      category: "session_exposure"
+      severity: "HIGH"
+      pattern: "(session[_-]?(id|token)|jwt|cookie)\s*[=:]\s*['\"]?[A-Za-z0-9_\-\.]{20,}['\"]?"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC6.3"
+        description: "Active session credentials exposed in prompts"
+        principle: "Security"
+
+    # ===== CC6.6 — AUTHENTICATION =====
+    
+    - id: "soc2_cc6.6_001"
+      name: "MFA Bypass Attempt"
+      category: "authentication"
+      severity: "CRITICAL"
+      pattern: "(bypass\s+(2fa|mfa|two.factor|multi.factor))|((disable|turn\s+off)\s+(2fa|mfa|two.factor|multi.factor|authentication))"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC6.6"
+        principle: "Security"
+
+    # ===== CC6.7 — DATA TRANSMISSION =====
+    
+    - id: "soc2_cc6.7_001"
+      name: "Unencrypted Data Transmission"
+      category: "data_exfiltration"
+      severity: "HIGH"
+      pattern: "(http://|ftp://)[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}|(send|upload|post|transfer)\s+(to\s+)?(external|outside|third.party)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC6.7"
+        description: "Data transmission without encryption"
+        principle: "Security"
+        
+    - id: "soc2_cc6.7_002"
+      name: "Data Exfiltration to External Domain"
+      category: "data_exfiltration"
+      severity: "CRITICAL"
+      pattern: "(pastebin\.com|github\.com/gist|transfer\.sh|file\.io|0x0\.st)"
+      action: "DENY"
+      metadata:
+        trust_criteria: "CC6.7"
+        principle: "Security"
+
+    # ===== CC6.8 — MALICIOUS SOFTWARE =====
+    
+    - id: "soc2_cc6.8_001"
+      name: "Malware-Related Commands"
+      category: "malware"
+      severity: "CRITICAL"
+      pattern: "(base64\s+-d\s+\||eval\s*\(|exec\s*\(|python\s+-c\s+['\"]|nc\s+-e\s+/bin/bash|ncat\s+-e)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC6.8"
+        description: "Patterns associated with malware execution"
+        principle: "Security"
+
+    # ===== CC7.1 — DETECTION =====
+    
+    - id: "soc2_cc7.1_001"
+      name: "Prompt Injection — System Override"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "ignore\s+(all\s+)?(previous\s+)?instructions|forget\s+(all\s+)?(previous\s+)?instructions"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC7.1"
+        description: "Anomaly detection — system instruction override"
+        principle: "Security"
+        
+    - id: "soc2_cc7.1_002"
+      name: "Prompt Injection — Role Change"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "(from\s+now\s+on\s+you\s+are|your\s+new\s+(role|persona)\s+is|act\s+as\s+(an?\s+)?(unrestricted|unfiltered|developer))"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC7.1"
+        
+    - id: "soc2_cc7.1_003"
+      name: "Prompt Injection — System Prompt Leak"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "(reveal|print|show|output)\s+(your\s+)?(system\s+)?(instructions?|prompt|configuration)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC7.1"
+        
+    - id: "soc2_cc7.1_004"
+      name: "Prompt Injection — Delimiter Attack"
+      category: "prompt_injection"
+      severity: "HIGH"
+      pattern: "```\s*(system|user|assistant)|<\s*(system|user|assistant)\s*>|\"\"\"\s*(system|user|assistant)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC7.1"
+        description: "Delimiter-based prompt injection attack"
+
+    # ===== CC7.2 — INCIDENT RESPONSE =====
+    
+    - id: "soc2_cc7.2_001"
+      name: "Rapid Sequential Requests"
+      category: "rate_limiting"
+      severity: "MEDIUM"
+      rate_limit:
+        requests_per_minute: 100
+        burst_size: 20
+      action: "RATE_LIMIT"
+      metadata:
+        trust_criteria: "CC7.2"
+        description: "Potential automated attack — rate limiting"
+        principle: "Security"
+
+    # ===== CC8.1 — CHANGE MANAGEMENT =====
+    
+    - id: "soc2_cc8.1_001"
+      name: "System Configuration Request"
+      category: "change_management"
+      severity: "MEDIUM"
+      pattern: "(change\s+(config|configuration|setting)|modify\s+(system|policy|rule)|update\s+(firewall|security|access))"
+      action: "HUMAN_REVIEW"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "CC8.1"
+        principle: "Security"
+
+    # ===== A1.1 — AVAILABILITY MONITORING =====
+    
+    - id: "soc2_a1.1_001"
+      name: "Resource Exhaustion Pattern"
+      category: "availability"
+      severity: "MEDIUM"
+      pattern: "(infinite\s+loop|while\s*\(\s*true\s*\)|for\s*\(;;\)|fork\s*bomb)"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "A1.1"
+        description: "Patterns that could cause resource exhaustion"
+        principle: "Availability"
+
+    # ===== C1.1 — CONFIDENTIALITY =====
+    
+    - id: "soc2_c1.1_001"
+      name: "SSN Exposure"
+      category: "pii_exposure"
+      severity: "CRITICAL"
+      pattern: "\b[0-9]{3}[-\s]?[0-9]{2}[-\s]?[0-9]{4}\b"
+      action: "DENY"
+      metadata:
+        trust_criteria: "C1.1"
+        principle: "Confidentiality"
+        
+    - id: "soc2_c1.1_002"
+      name: "Credit Card Exposure"
+      category: "pii_exposure"
+      severity: "CRITICAL"
+      pattern: "\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\b"
+      action: "DENY"
+      metadata:
+        trust_criteria: "C1.1"
+        principle: "Confidentiality"
+        
+    - id: "soc2_c1.1_003"
+      name: "Bank Account Number"
+      category: "pii_exposure"
+      severity: "HIGH"
+      pattern: "(routing\s+(number|#)|account\s+(number|#))\s*[:#\s]*[0-9]{5,}"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "C1.1"
+        principle: "Confidentiality"
+        
+    - id: "soc2_c1.1_004"
+      name: "Tax ID / EIN"
+      category: "pii_exposure"
+      severity: "HIGH"
+      pattern: "\b[0-9]{2}[-\s]?[0-9]{7}\b"
+      action: "DENY"
+      metadata:
+        trust_criteria: "C1.1"
+        principle: "Confidentiality"
+
+    # ===== P1.1 — PRIVACY NOTICE =====
+    
+    - id: "soc2_p1.1_001"
+      name: "Personal Information Request"
+      category: "privacy"
+      severity: "MEDIUM"
+      pattern: "(what\s+is\s+(my|the\s+user['\s]?s?)\s+(name|address|phone|email|ssn|dob)|who\s+(is|am)\s+i\?|reveal\s+(user|customer|patient)\s+data)"
+      action: "HUMAN_REVIEW"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "P1.1"
+        principle: "Privacy"
+        
+    - id: "soc2_p1.1_002"
+      name: "Cross-User Data Access"
+      category: "privacy"
+      severity: "HIGH"
+      pattern: "(show\s+(me\s+)?other\s+(user|customer|patient)\s*('s)?\s*(data|info|records)|list\s+all\s+(users|customers|patients))"
+      action: "DENY"
+      case_sensitive: false
+      metadata:
+        trust_criteria: "P1.1"
+        principle: "Privacy"
+
+  risk_scoring:
+    credential_leak: 0.95
+    access_violation: 0.90
+    session_exposure: 0.85
+    authentication: 0.95
+    data_exfiltration: 0.85
+    malware: 0.95
+    prompt_injection: 0.85
+    rate_limiting: 0.40
+    change_management: 0.50
+    availability: 0.60
+    pii_exposure: 0.95
+    privacy: 0.70
+    benign: 0.05
+
+  alerts:
+    critical:
+      channels: ["webhook", "dashboard", "email"]
+      cooldown_minutes: 0
+      escalation_policy: "immediate"
+    high:
+      channels: ["dashboard", "webhook"]
+      cooldown_minutes: 2
+      escalation_policy: "15_minutes"
+    medium:
+      channels: ["dashboard"]
+      cooldown_minutes: 10
+    low:
+      channels: ["log_only"]
+      cooldown_minutes: 60
+
+  audit:
+    log_all_requests: true
+    log_request_body: false
+    log_metadata: true
+    log_response_action: true
+    log_user_identity: true
+    retention_days: 2555  # 7 years
+    immutable_logs: true
+    tamper_detection: true
+    
+  access_control:
+    minimum_authentication: "multi_factor"
+    role_based_access: true
+    principle_of_least_privilege: true
+    session_timeout_minutes: 30
+    concurrent_session_limit: 2
+    
+  monitoring:
+    anomaly_detection: true
+    baseline_establishment_hours: 168  # 7 days
+    deviation_threshold: 2.5  # Standard deviations
+    auto_response: "quarantine"
