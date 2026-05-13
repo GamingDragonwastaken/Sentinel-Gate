@@ -116,9 +116,8 @@ def _get_threat(prompt: str, intent_label: str) -> dict:
 def _render_user_message(content: str) -> None:
     safe = content.replace("<", "&lt;").replace(">", "&gt;")
     st.markdown(
-        f"""<div style="display:flex;justify-content:flex-end;margin:8px 0;">
-        <div style="background:#1e3a8a;padding:10px 14px;border-radius:12px;
-                    max-width:80%;color:#e2e8f0;">{safe}</div></div>""",
+        f"""<div class="sg-user-bubble">
+        <div class="sg-user-bubble-inner">{safe}</div></div>""",
         unsafe_allow_html=True,
     )
 
@@ -137,9 +136,8 @@ def _render_threat_report(prompt: str, intent_label: str) -> None:
 
 def _render_assistant_message(msg: dict) -> None:
     score = float(msg.get("risk_score", 0.0))
-    level = get_risk_level(score)
-    color = RISK_COLORS[level]
     intent = msg.get("intent_label", "")
+    intent_safe = intent.replace("<", "&lt;").replace(">", "&gt;")
     agent_id = (msg.get("agent_id") or "").strip()
     citation = (msg.get("compliance_citation") or "").strip()
 
@@ -150,19 +148,17 @@ def _render_assistant_message(msg: dict) -> None:
         if agent_id:
             safe_agent = agent_id.replace("<", "&lt;").replace(">", "&gt;")
             agent_badge = (
-                f"<span style='background:rgba(0,212,255,0.12);color:#00d4ff;"
-                f"padding:2px 8px;border-radius:6px;margin-left:8px;"
-                f"font-size:0.72em;letter-spacing:1px;text-transform:uppercase;'>"
-                f"👤 {safe_agent}</span>"
+                f'<span class="sg-pill sg-pill-agent">👤 {safe_agent}</span>'
             )
         st.markdown(
-            f"""<div style="border-left:4px solid {color};
-                        background:rgba(34,197,94,0.06);padding:10px 14px;
-                        margin:8px 0;border-radius:8px;">
-            <div style="color:{color};font-weight:600;font-size:0.9em;
-                        margin-bottom:6px;">
-            ✅ ALLOWED | Risk: {score:.2f} | Intent: {intent}{agent_badge}</div>
-            <div style="color:#e2e8f0;white-space:pre-wrap;">{safe_body}</div>
+            f"""<div class="sg-card sg-card-allow">
+              <div class="sg-card-header">
+                <span class="sg-pill sg-pill-allow">✅ Allowed</span>
+                <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
+                <span class="sg-pill sg-pill-meta">Intent: {intent_safe}</span>
+                {agent_badge}
+              </div>
+              <div class="sg-card-body">{safe_body}</div>
             </div>""",
             unsafe_allow_html=True,
         )
@@ -175,18 +171,18 @@ def _render_assistant_message(msg: dict) -> None:
     if citation:
         safe_citation = citation.replace("<", "&lt;").replace(">", "&gt;")
         citation_block = (
-            f"<div style='margin-top:6px;color:#fca5a5;font-size:0.82em;'>"
+            f'<div class="sg-card-citation">'
             f"📋 <b>Compliance:</b> {safe_citation}</div>"
         )
     st.markdown(
-        f"""<div style="border-left:4px solid {color};
-                    background:rgba(239,68,68,0.06);padding:10px 14px;
-                    margin:8px 0;border-radius:8px;">
-        <div style="color:{color};font-weight:600;font-size:0.9em;
-                    margin-bottom:6px;">
-        ⛔ BLOCKED | Risk: {score:.2f} | Intent: {intent}</div>
-        <div style="color:#cbd5e1;white-space:pre-wrap;">{safe_reason}</div>
-        {citation_block}
+        f"""<div class="sg-card sg-card-block">
+          <div class="sg-card-header">
+            <span class="sg-pill sg-pill-block">⛔ Blocked</span>
+            <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
+            <span class="sg-pill sg-pill-meta">Intent: {intent_safe}</span>
+          </div>
+          <div class="sg-card-body">{safe_reason}</div>
+          {citation_block}
         </div>""",
         unsafe_allow_html=True,
     )
@@ -199,17 +195,15 @@ def _render_risk_monitor() -> None:
     if last is not None:
         score = float(getattr(last, "risk_score", 0.0))
         level = get_risk_level(score)
-        color = RISK_COLORS[level]
         st.markdown(
-            f"""<div style="text-align:center;color:{color};
-                        font-size:3.2em;font-weight:800;line-height:1;">
-            {score:.2f}</div>""",
+            f'<div class="sg-risk-score sg-risk-{level}">{score:.2f}</div>',
             unsafe_allow_html=True,
         )
         st.progress(min(1.0, max(0.0, score)))
         st.markdown(
-            f"<div style='text-align:center;color:{color};font-weight:700;"
-            f"letter-spacing:2px;'>{_RISK_LABELS[level]}</div>",
+            f'<div class="sg-risk-label-wrap">'
+            f'<span class="sg-risk-label sg-risk-label-{level}">'
+            f"{_RISK_LABELS[level]}</span></div>",
             unsafe_allow_html=True,
         )
     else:
@@ -228,14 +222,11 @@ def _render_risk_monitor() -> None:
     if last is not None and getattr(last, "flags", None):
         st.divider()
         st.markdown("**Active Flags**")
-        for flag in last.flags:
-            st.markdown(
-                "<span style='background:rgba(239,68,68,0.18);color:#ef4444;"
-                "padding:4px 10px;border-radius:6px;margin:2px;"
-                "display:inline-block;font-size:0.85em;'>"
-                f"❌ {flag}</span>",
-                unsafe_allow_html=True,
-            )
+        chips = "".join(
+            f'<span class="sg-flag-chip">❌ {str(flag).replace("<", "&lt;")}</span>'
+            for flag in last.flags
+        )
+        st.markdown(chips, unsafe_allow_html=True)
 
 
 def _handle_scenario_load() -> None:
