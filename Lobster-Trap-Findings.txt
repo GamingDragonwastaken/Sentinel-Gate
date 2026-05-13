@@ -1,0 +1,29 @@
+LOBSTER TRAP FINDINGS — Day 1 Research
+========================================
+Binary: No pre-built releases on GitHub. Must build from source.
+Source: https://github.com/veeainc/lobstertrap
+
+STARTUP COMMAND:
+lobstertrap serve \
+  --policy configs/default_policy.yaml \
+  --listen :8765 \
+  --backend https://generativelanguage.googleapis.com/v1beta/openai/ \
+  --audit-log audit.json \
+  --no-dashboard
+
+CONFIG FORMAT: YAML at configs/default_policy.yaml
+
+HTTP API: OpenAI-compatible
+  POST /v1/chat/completions (same endpoint for both prompt and response scanning)
+  Ingress DPI on prompts going to model
+  Egress DPI on model responses coming back
+
+BINARY PLAN FOR DAY 2:
+  Install Go → git clone repo → cross-compile Linux binary → commit to repo
+  GOOS=linux GOARCH=amd64 go build -o bin/lobstertrap .
+  Fallback: Gemini-based inspection if build fails within 2-hour limit.
+
+HOSTING: Streamlit Cloud — CONFIRMED via deploy 2026-05-11.
+  Live URL: https://sentinel-ga-xprp5cobtornlij8o9yawu.streamlit.app
+  Build: Python 3.14.4, 67 pkgs via uv, clean log, no warnings.
+  Branch deployed: claude/hardcore-shaw-280f23
