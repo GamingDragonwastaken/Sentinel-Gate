@@ -26,20 +26,28 @@ RISK_COLORS = {
 
 _RISK_LABELS = {
     "safe": "SAFE",
-    "medium": "MEDIUM",
+    "medium": "MEDIUM RISK",
     "high": "HIGH RISK",
-    "critical": "CRITICAL",
+    "critical": "CRITICAL THREAT",
 }
 
 _SCENARIO_PLACEHOLDER = "(choose a scenario...)"
 
 
 def get_risk_level(score: float) -> str:
+    """Bucket a risk score into one of four labels.
+
+    Bucket boundaries (spec):
+      0.0–0.3   safe
+      0.3–0.7   medium
+      0.7–0.9   high
+      0.9–1.0   critical
+    """
     if score < 0.3:
         return "safe"
-    if score < 0.5:
+    if score < 0.7:
         return "medium"
-    if score < 0.8:
+    if score < 0.9:
         return "high"
     return "critical"
 
@@ -132,17 +140,28 @@ def _render_assistant_message(msg: dict) -> None:
     level = get_risk_level(score)
     color = RISK_COLORS[level]
     intent = msg.get("intent_label", "")
+    agent_id = (msg.get("agent_id") or "").strip()
+    citation = (msg.get("compliance_citation") or "").strip()
 
     if msg.get("decision") == "ALLOW":
         body = msg.get("response") or "(empty response)"
         safe_body = body.replace("<", "&lt;").replace(">", "&gt;")
+        agent_badge = ""
+        if agent_id:
+            safe_agent = agent_id.replace("<", "&lt;").replace(">", "&gt;")
+            agent_badge = (
+                f"<span style='background:rgba(0,212,255,0.12);color:#00d4ff;"
+                f"padding:2px 8px;border-radius:6px;margin-left:8px;"
+                f"font-size:0.72em;letter-spacing:1px;text-transform:uppercase;'>"
+                f"👤 {safe_agent}</span>"
+            )
         st.markdown(
             f"""<div style="border-left:4px solid {color};
                         background:rgba(34,197,94,0.06);padding:10px 14px;
                         margin:8px 0;border-radius:8px;">
             <div style="color:{color};font-weight:600;font-size:0.9em;
                         margin-bottom:6px;">
-            ✅ ALLOWED | Risk: {score:.2f} | Intent: {intent}</div>
+            ✅ ALLOWED | Risk: {score:.2f} | Intent: {intent}{agent_badge}</div>
             <div style="color:#e2e8f0;white-space:pre-wrap;">{safe_body}</div>
             </div>""",
             unsafe_allow_html=True,
@@ -152,6 +171,13 @@ def _render_assistant_message(msg: dict) -> None:
     # BLOCK
     reason = msg.get("block_reason") or "Blocked by gateway"
     safe_reason = reason.replace("<", "&lt;").replace(">", "&gt;")
+    citation_block = ""
+    if citation:
+        safe_citation = citation.replace("<", "&lt;").replace(">", "&gt;")
+        citation_block = (
+            f"<div style='margin-top:6px;color:#fca5a5;font-size:0.82em;'>"
+            f"📋 <b>Compliance:</b> {safe_citation}</div>"
+        )
     st.markdown(
         f"""<div style="border-left:4px solid {color};
                     background:rgba(239,68,68,0.06);padding:10px 14px;
@@ -160,6 +186,7 @@ def _render_assistant_message(msg: dict) -> None:
                     margin-bottom:6px;">
         ⛔ BLOCKED | Risk: {score:.2f} | Intent: {intent}</div>
         <div style="color:#cbd5e1;white-space:pre-wrap;">{safe_reason}</div>
+        {citation_block}
         </div>""",
         unsafe_allow_html=True,
     )
@@ -296,6 +323,8 @@ def render_chat_panel() -> None:
                         "response": result.response,
                         "block_reason": result.block_reason,
                         "flags": list(result.flags),
+                        "agent_id": getattr(result, "agent_id", agent_id),
+                        "compliance_citation": getattr(result, "compliance_citation", ""),
                     }
                 )
                 st.session_state.last_result = result

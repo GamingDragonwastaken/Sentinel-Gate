@@ -11,8 +11,14 @@ Exposes three helpers:
 import json
 import os
 import re
+import time
 
 import google.generativeai as genai
+
+# Rate-limit retry policy. One retry (= 2 total attempts), 2-second pause.
+_RATE_LIMIT_MAX_RETRIES = 1
+_RATE_LIMIT_DELAY_S = 2.0
+_RATE_LIMIT_SENTINEL = "[rate_limited] Request could not be processed"
 
 MODEL_NAME = "gemini-2.5-flash"
 LOBSTER_PORT = int(os.getenv("LOBSTER_PORT", "8765"))
@@ -57,20 +63,47 @@ def _format_exception(exc: Exception) -> str:
     return f"[gemini_error] {type(exc).__name__}: {exc}"
 
 
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """True when the exception text looks like a Google rate-limit / quota error."""
+    msg = str(exc).lower()
+    return (
+        "429" in msg
+        or "quota" in msg
+        or "rate limit" in msg
+        or "resourceexhausted" in msg
+    )
+
+
 def call_gemini(prompt: str, system_prompt: str | None = None) -> str:
     """Send `prompt` to Gemini Flash and return the response text.
 
-    Any exception (auth, quota, network) is caught and returned as an
-    error string so the caller can surface it without crashing the UI.
+    On a 429 / quota error, sleeps `_RATE_LIMIT_DELAY_S` and retries once.
+    After two failed rate-limit attempts, returns the `_RATE_LIMIT_SENTINEL`
+    string so the caller can distinguish quota exhaustion from other
+    failures. Any other exception (auth, network, safety block) is caught
+    and returned as a `[gemini_error] ...` string. Never raises.
     """
     config_error = _configure()
     if config_error:
         return config_error
-    try:
-        response = _model(system_prompt).generate_content(prompt)
-        return getattr(response, "text", "") or ""
-    except Exception as exc:  # pragma: no cover - network-dependent
-        return _format_exception(exc)
+
+    last_exc: Exception | None = None
+    for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
+        try:
+            response = _model(system_prompt).generate_content(prompt)
+            return getattr(response, "text", "") or ""
+        except Exception as exc:  # pragma: no cover - network-dependent
+            last_exc = exc
+            if attempt < _RATE_LIMIT_MAX_RETRIES and _is_rate_limit_error(exc):
+                time.sleep(_RATE_LIMIT_DELAY_S)
+                continue
+            break
+
+    if last_exc is not None and _is_rate_limit_error(last_exc):
+        return _RATE_LIMIT_SENTINEL
+    if last_exc is not None:
+        return _format_exception(last_exc)
+    return "[gemini_error] Unknown failure"
 
 
 def _extract_json(text: str) -> dict:
@@ -98,6 +131,8 @@ def call_gemini_json(prompt: str, system_prompt: str | None = None) -> dict:
     """
     raw = call_gemini(prompt, system_prompt=system_prompt)
     if raw.startswith("[gemini_error]"):
+        return {"error": "api_failed", "raw": raw}
+    if raw.startswith("[rate_limited]"):
         return {"error": "api_failed", "raw": raw}
     try:
         return _extract_json(raw)

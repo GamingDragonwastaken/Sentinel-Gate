@@ -24,6 +24,17 @@ from security.policies import (
     get_active_policies,
 )
 
+# Compliance packs are loaded lazily and *only* used to surface a citation
+# alongside an already-made decision. They never independently cause a BLOCK.
+try:
+    from security.compliance_engine import check_compliance, load_compliance_packs
+    _COMPLIANCE_PACKS = load_compliance_packs()
+except Exception:  # pragma: no cover - degrades gracefully if engine absent
+    _COMPLIANCE_PACKS = []
+    def check_compliance(text, packs):  # type: ignore[no-redef]
+        from types import SimpleNamespace
+        return SimpleNamespace(matched=False, rule_name=None, compliance_refs=[])
+
 
 _log = logging.getLogger("sentinelgate.gateway")
 
@@ -46,6 +57,10 @@ class GatewayResult:
     block_reason: str = ""
     processing_time_ms: int = 0
     audit_id: str = ""
+    # Informational citation from the compliance pack engine. Populated only
+    # when a pack rule matched the prompt; never drives the decision itself.
+    compliance_citation: str = ""
+    agent_id: str = ""
 
 
 def _risk_threshold() -> float:
@@ -109,6 +124,32 @@ def process_prompt(
             )
             response_text = ""  # do not leak a flagged response back to caller
 
+    # Step 4.5 — compliance pack citation (informational, not decisive).
+    # We only look up a citation; we never use the match to BLOCK because
+    # that would change the decision contract.
+    compliance_citation = ""
+    try:
+        if _COMPLIANCE_PACKS:
+            match = check_compliance(prompt, _COMPLIANCE_PACKS)
+            if getattr(match, "matched", False):
+                refs = [r for r in (getattr(match, "compliance_refs", []) or []) if r]
+                framework = ""
+                # Find the pack whose rule matched so we can name the framework.
+                rule_name = getattr(match, "rule_name", "") or ""
+                for pack in _COMPLIANCE_PACKS:
+                    if any(getattr(r, "name", "") == rule_name for r in pack.rules):
+                        framework = pack.framework
+                        break
+                if refs and framework:
+                    compliance_citation = f"{framework} {refs[0]}"
+                elif framework:
+                    compliance_citation = framework
+                elif refs:
+                    compliance_citation = refs[0]
+    except Exception as exc:  # pragma: no cover - never crash the gateway
+        _log.warning("compliance pack lookup failed: %s", exc)
+        compliance_citation = ""
+
     elapsed_ms = int((time.perf_counter() - started) * 1000)
 
     # Step 5 — audit log
@@ -150,4 +191,6 @@ def process_prompt(
         block_reason=block_reason,
         processing_time_ms=elapsed_ms,
         audit_id=audit_id,
+        compliance_citation=compliance_citation,
+        agent_id=agent_id,
     )
