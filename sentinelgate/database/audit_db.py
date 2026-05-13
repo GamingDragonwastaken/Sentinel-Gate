@@ -252,6 +252,17 @@ def count_today() -> int:
         return int(n)
 
 
+def count_blocked_today() -> int:
+    """Count BLOCK decisions in the last 24 hours."""
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    with _connect() as conn:
+        (n,) = conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE timestamp >= ? AND decision = 'BLOCK'",
+            (cutoff,),
+        ).fetchone()
+        return int(n)
+
+
 def get_agent_breakdown() -> dict:
     """Return {agent_id: count} from audit_log, excluding NULL agents."""
     with _connect() as conn:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 import re
-import yaml
+# NOTE: yaml is intentionally NOT imported — the policy files are parsed via
+# the regex-based tolerant parser below, not via PyYAML. Importing yaml here
+# would force PyYAML into requirements.txt for zero functional benefit.
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
