@@ -73,6 +73,35 @@ def add_custom_css() -> None:
          * from v1; this is a CSS-only enhancement.
          * ============================================================ */
 
+        /* --- Typography: Geist (sans) + Geist Mono (numbers) --- *
+         * Pairing per ui-ux-design-taste deterministic typography rule
+         * for software/dashboard UIs. Loaded via Google Fonts CDN, which
+         * Streamlit Cloud serves through its egress without extra config.
+         * Streamlit's default font has high CSS specificity, so we use a
+         * compound selector + !important to win the cascade.
+         */
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap');
+
+        html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"],
+        .stApp, .stApp * {
+            font-family: 'Geist', system-ui, -apple-system, 'Segoe UI',
+                         Roboto, sans-serif !important;
+        }
+        .sg-risk-score,
+        [data-testid="stMetricValue"],
+        .sg-mono {
+            font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace,
+                         SFMono-Regular, Menlo, Consolas, monospace !important;
+            font-feature-settings: 'tnum' on, 'ss01' on;
+        }
+        .sg-hero-title,
+        .sg-hero-sub,
+        .sg-pill,
+        .sg-risk-label,
+        [data-testid="stMetricLabel"] {
+            font-feature-settings: 'ss01' on, 'cv11' on;
+        }
+
         /* --- Item 1: Background with cyan corona at top --- */
         html, body,
         [data-testid="stAppViewContainer"],
