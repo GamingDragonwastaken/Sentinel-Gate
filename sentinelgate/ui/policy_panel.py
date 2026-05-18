@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from html import escape as html_escape
+
 import streamlit as st
 
 from security.policies import (
@@ -98,40 +100,41 @@ def _render_create_form() -> None:
 
 
 def _render_policy_card(p: Policy) -> None:
+    """Render a single policy card using the .sg-policy-* classes from app.py.
+
+    Severity drives the left-border accent through the --sg-policy-accent
+    CSS variable; status drives the tint of the inline tag pills. Inline
+    styles are confined to those three variable values — every other rule
+    lives in the central style block so this card visually matches the
+    rest of the UI without theme drift.
+    """
     sev_color = _SEVERITY_COLORS.get(p.severity, "#94a3b8")
     status_color = "#22c55e" if p.active else "#64748b"
-    status_label = "ACTIVE" if p.active else "INACTIVE"
+    status_label = "Active" if p.active else "Inactive"
 
-    name_safe = p.name.replace("<", "&lt;").replace(">", "&gt;")
-    text_safe = p.natural_language.replace("<", "&lt;").replace(">", "&gt;")
+    name_safe = html_escape(p.name, quote=True)
+    text_safe = html_escape(p.natural_language, quote=True)
+    sev_safe = html_escape(p.severity, quote=True)
 
     st.markdown(
-        f"""<div style="border-left:4px solid {sev_color};
-                    background:rgba(17,24,39,0.6);padding:12px 16px;
-                    margin:8px 0;border-radius:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-weight:600;color:#e2e8f0;font-size:1.05em;">{name_safe}</div>
-            <div>
-                <span style="background:{sev_color}33;color:{sev_color};
-                            padding:2px 10px;border-radius:6px;
-                            font-size:0.75em;text-transform:uppercase;
-                            margin-right:6px;">{p.severity}</span>
-                <span style="background:{status_color}22;color:{status_color};
-                            padding:2px 10px;border-radius:6px;
-                            font-size:0.75em;">{status_label}</span>
+        f"""<div class="sg-policy-card" style="--sg-policy-accent:{sev_color};">
+          <div class="sg-policy-row">
+            <div class="sg-policy-name">{name_safe}</div>
+            <div class="sg-policy-tags">
+              <span class="sg-policy-sev"
+                    style="background:{sev_color}26;color:{sev_color};">{sev_safe}</span>
+              <span class="sg-policy-status"
+                    style="background:{status_color}1f;color:{status_color};">{status_label}</span>
             </div>
-        </div>
-        <div style="color:#cbd5e1;margin-top:6px;font-size:0.92em;">{text_safe}</div>
+          </div>
+          <div class="sg-policy-text">{text_safe}</div>
         </div>""",
         unsafe_allow_html=True,
     )
 
-    # Keyword tags
     if p.enforcement_keywords:
         chips = "".join(
-            f"<span style='background:rgba(0,212,255,0.12);color:#00d4ff;"
-            f"padding:2px 8px;border-radius:6px;margin:2px;display:inline-block;"
-            f"font-size:0.78em;'>{kw.replace('<', '&lt;')}</span>"
+            f'<span class="sg-policy-keyword">{html_escape(kw, quote=True)}</span>'
             for kw in p.enforcement_keywords
         )
         st.markdown(

@@ -34,7 +34,6 @@ if not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
 from database.audit_db import (
     clear_audit_log,
     count_blocked_today,
-    count_today,
     get_stats,
 )
 from security.compliance_engine import load_compliance_packs

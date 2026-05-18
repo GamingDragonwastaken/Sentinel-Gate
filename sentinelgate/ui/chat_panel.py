@@ -9,7 +9,7 @@ Gemini Threat Intelligence expander.
 from __future__ import annotations
 
 import hashlib
-import uuid
+from html import escape as html_escape
 
 import streamlit as st
 
@@ -63,20 +63,19 @@ def get_risk_level(score: float) -> str:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _init_session_state() -> None:
-    ss = st.session_state
-    if "messages" not in ss:
-        ss.messages = []
-    if "session_id" not in ss:
-        ss.session_id = str(uuid.uuid4())
-    if "last_result" not in ss:
-        ss.last_result = None
-    if "threat_cache" not in ss:
-        ss.threat_cache = {}
-    if "prompt_input" not in ss:
-        ss.prompt_input = ""
-    if "scenario_choice" not in ss:
-        ss.scenario_choice = _SCENARIO_PLACEHOLDER
+# Session state is initialized centrally in app.py::_init_session_state().
+# This panel intentionally does not re-init — duplicate initializers can drift
+# and cause the panel that runs first to "win" when keys diverge.
+def _e(value: object) -> str:
+    """HTML-escape with quote escaping — safer than ad-hoc str.replace pairs.
+
+    A bare ``str.replace("<", "&lt;")`` chain misses ampersands, single
+    quotes, and double quotes, which means a hostile prompt containing
+    ``</style><script>...`` could break out of the surrounding context.
+    Using stdlib ``html.escape(value, quote=True)`` is the correct
+    boundary discipline.
+    """
+    return html_escape(str(value), quote=True)
 
 
 def _threat_cache_key(prompt: str, intent_label: str) -> str:
@@ -121,10 +120,9 @@ def _get_threat(prompt: str, intent_label: str) -> dict:
 
 
 def _render_user_message(content: str) -> None:
-    safe = content.replace("<", "&lt;").replace(">", "&gt;")
     st.markdown(
         f"""<div class="sg-user-bubble">
-        <div class="sg-user-bubble-inner">{safe}</div></div>""",
+        <div class="sg-user-bubble-inner">{_e(content)}</div></div>""",
         unsafe_allow_html=True,
     )
 
@@ -144,28 +142,25 @@ def _render_threat_report(prompt: str, intent_label: str) -> None:
 def _render_assistant_message(msg: dict) -> None:
     score = float(msg.get("risk_score", 0.0))
     intent = msg.get("intent_label", "")
-    intent_safe = intent.replace("<", "&lt;").replace(">", "&gt;")
     agent_id = (msg.get("agent_id") or "").strip()
     citation = (msg.get("compliance_citation") or "").strip()
 
     if msg.get("decision") == "ALLOW":
         body = msg.get("response") or "(empty response)"
-        safe_body = body.replace("<", "&lt;").replace(">", "&gt;")
         agent_badge = ""
         if agent_id:
-            safe_agent = agent_id.replace("<", "&lt;").replace(">", "&gt;")
             agent_badge = (
-                f'<span class="sg-pill sg-pill-agent">{USER}{safe_agent}</span>'
+                f'<span class="sg-pill sg-pill-agent">{USER}{_e(agent_id)}</span>'
             )
         st.markdown(
             f"""<div class="sg-card sg-card-allow">
               <div class="sg-card-header">
                 <span class="sg-pill sg-pill-allow">{CHECK_CIRCLE}Allowed</span>
                 <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
-                <span class="sg-pill sg-pill-meta">Intent: {intent_safe}</span>
+                <span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>
                 {agent_badge}
               </div>
-              <div class="sg-card-body">{safe_body}</div>
+              <div class="sg-card-body">{_e(body)}</div>
             </div>""",
             unsafe_allow_html=True,
         )
@@ -173,23 +168,21 @@ def _render_assistant_message(msg: dict) -> None:
 
     # BLOCK
     reason = msg.get("block_reason") or "Blocked by gateway"
-    safe_reason = reason.replace("<", "&lt;").replace(">", "&gt;")
     citation_block = ""
     if citation:
-        safe_citation = citation.replace("<", "&lt;").replace(">", "&gt;")
         citation_block = (
             f'<div class="sg-card-citation">'
             f'<span style="display:inline-flex;align-items:center;gap:6px;">'
-            f'{CLIPBOARD_CHECK}<b>Compliance:</b> {safe_citation}</span></div>'
+            f'{CLIPBOARD_CHECK}<b>Compliance:</b> {_e(citation)}</span></div>'
         )
     st.markdown(
         f"""<div class="sg-card sg-card-block">
           <div class="sg-card-header">
             <span class="sg-pill sg-pill-block">{BAN}Blocked</span>
             <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
-            <span class="sg-pill sg-pill-meta">Intent: {intent_safe}</span>
+            <span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>
           </div>
-          <div class="sg-card-body">{safe_reason}</div>
+          <div class="sg-card-body">{_e(reason)}</div>
           {citation_block}
         </div>""",
         unsafe_allow_html=True,
@@ -231,7 +224,7 @@ def _render_risk_monitor() -> None:
         st.divider()
         st.markdown("**Active flags**")
         chips = "".join(
-            f'<span class="sg-flag-chip">{X_MARK}{str(flag).replace("<", "&lt;")}</span>'
+            f'<span class="sg-flag-chip">{X_MARK}{_e(flag)}</span>'
             for flag in last.flags
         )
         st.markdown(chips, unsafe_allow_html=True)
@@ -256,7 +249,7 @@ def _handle_scenario_load() -> None:
 
 def render_chat_panel() -> None:
     """Render the Chat & Inspect tab in full."""
-    _init_session_state()
+    # Session state is initialized centrally in app.py — do not re-init here.
 
     # Lazy import — avoid the import-time cost when this module is loaded
     # by app.py, and also break a potential circular when other security
