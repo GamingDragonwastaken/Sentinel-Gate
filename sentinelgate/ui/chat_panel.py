@@ -11,9 +11,10 @@ from __future__ import annotations
 import hashlib
 from html import escape as html_escape
 
+import plotly.graph_objects as go
 import streamlit as st
 
-from database.audit_db import get_stats
+from database.audit_db import get_recent_logs, get_stats
 from demo.scenarios import SCENARIOS
 from ui.icons import (
     BAN,
@@ -199,6 +200,42 @@ def _render_assistant_message(msg: dict) -> None:
         _render_threat_report(msg.get("prompt", ""), intent)
 
 
+def _render_risk_sparkline(logs: list[dict], limit: int = 15) -> None:
+    """Render a 32px tall sparkline of the last `limit` risk scores."""
+    recent_logs = list(logs[:limit])
+    scores = []
+    for log in reversed(recent_logs):
+        try:
+            scores.append(float(log.get("risk_score", 0.0)))
+        except (TypeError, ValueError):
+            continue
+
+    if len(scores) < 2:
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Scatter(
+                x=list(range(len(scores))),
+                y=scores,
+                mode="lines",
+                line=dict(color="#00D4FF", width=1.5),
+                hoverinfo="skip",
+            )
+        ]
+    )
+    fig.update_layout(
+        height=44,
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False, range=[0, 1]),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
 def _render_risk_monitor() -> None:
     last = st.session_state.last_result
     if last is not None:
@@ -209,6 +246,11 @@ def _render_risk_monitor() -> None:
             unsafe_allow_html=True,
         )
         st.progress(min(1.0, max(0.0, score)))
+        try:
+            logs = get_recent_logs(limit=15)
+        except Exception:
+            logs = []
+        _render_risk_sparkline(logs, limit=15)
         st.markdown(
             f'<div class="sg-risk-label-wrap">'
             f'<span class="sg-risk-label sg-risk-label-{level}">'
