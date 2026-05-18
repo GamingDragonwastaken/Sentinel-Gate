@@ -146,8 +146,11 @@ def _render_assistant_message(msg: dict) -> None:
     agent_id = (msg.get("agent_id") or "").strip()
     citation = (msg.get("compliance_citation") or "").strip()
     inspection_ms = float(msg.get("inspection_ms") or 0.0)
+    # Latency uses its own pill class (mono font + tabular nums + cyan dot)
+    # so it visually reads as an instrument reading, not a label.
     lat_pill = (
-        f'<span class="sg-pill sg-pill-meta">{inspection_ms:.1f}ms</span>'
+        f'<span class="sg-pill sg-pill-latency" title="Inspection latency">'
+        f"{inspection_ms:.1f}ms</span>"
         if inspection_ms
         else ""
     )
@@ -201,7 +204,14 @@ def _render_assistant_message(msg: dict) -> None:
 
 
 def _render_risk_sparkline(logs: list[dict], limit: int = 15) -> None:
-    """Render a 32px tall sparkline of the last `limit` risk scores."""
+    """Render a 32px tall sparkline of the last `limit` risk scores.
+
+    Wrapped in a labeled container (.sg-sparkline-wrap) so the chart reads
+    as a dashboard instrument rather than floating in the column. Both the
+    open and close <div> tags are emitted as separate st.markdown calls
+    because Streamlit cannot interleave a plotly chart inside a single
+    markdown block — the chart is its own rendered widget.
+    """
     recent_logs = list(logs[:limit])
     scores = []
     for log in reversed(recent_logs):
@@ -219,19 +229,29 @@ def _render_risk_sparkline(logs: list[dict], limit: int = 15) -> None:
                 x=list(range(len(scores))),
                 y=scores,
                 mode="lines",
-                line=dict(color="#00D4FF", width=1.5),
+                line=dict(color="#00D4FF", width=1.6, shape="spline", smoothing=0.6),
+                fill="tozeroy",
+                fillcolor="rgba(0, 212, 255, 0.10)",
                 hoverinfo="skip",
             )
         ]
     )
     fig.update_layout(
-        height=44,
+        height=52,
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False, range=[0, 1]),
+        xaxis=dict(visible=False, fixedrange=True),
+        yaxis=dict(visible=False, range=[0, 1], fixedrange=True),
         showlegend=False,
+    )
+
+    st.markdown(
+        f'<div class="sg-sparkline-label">'
+        f"<span>Risk history</span>"
+        f'<span class="sg-sparkline-count">{len(scores)} of {limit}</span>'
+        f"</div>",
+        unsafe_allow_html=True,
     )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 

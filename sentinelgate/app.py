@@ -534,6 +534,62 @@ def add_custom_css() -> None:
         /* --- Inline-SVG sizing helper used across pills/badges --- */
         .sg-icon { display: inline-block; vertical-align: -2px; }
 
+        /* --- Latency pill (instrument reading, not a label) ---
+         * Mono digits + tabular numerals so "0.4ms" and "12.3ms" right-align
+         * column-wise across stacked cards. A 5px filled dot prefix announces
+         * this as a live measurement rather than a static descriptor. */
+        .sg-pill-latency {
+            background: rgba(0, 212, 255, 0.06) !important;
+            color: #7dd3fc !important;
+            border: 1px solid rgba(0, 212, 255, 0.22) !important;
+            font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace,
+                         SFMono-Regular, Menlo, Consolas, monospace !important;
+            font-feature-settings: 'tnum' on !important;
+            font-size: 0.66rem !important;
+            padding: 3px 10px !important;
+            letter-spacing: 0.5px !important;
+            font-weight: 700 !important;
+            text-transform: none !important;
+        }
+        .sg-pill-latency::before {
+            content: "";
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #00d4ff;
+            box-shadow: 0 0 6px rgba(0,212,255,0.6);
+            margin-right: 6px;
+            vertical-align: 1px;
+        }
+
+        /* --- Risk-history sparkline label ---
+         * Streamlit renders each st.markdown call in its own DOM container,
+         * so an outer .sg-sparkline-wrap div cannot enclose the plotly chart
+         * across markdown boundaries (the browser auto-closes the unmatched
+         * div). Instead the label carries the visual framing: cyan border
+         * at the bottom anchors the chart that follows it. */
+        .sg-sparkline-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #64748b;
+            font-size: 0.66rem;
+            font-weight: 700;
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+            margin: 14px 0 2px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.14);
+        }
+        .sg-sparkline-label .sg-sparkline-count {
+            color: #00d4ff;
+            font-family: 'Geist Mono', ui-monospace, monospace;
+            font-feature-settings: 'tnum' on;
+            letter-spacing: 0.5px;
+            text-transform: none;
+        }
+
         /* --- Policy card (migrated from inline styles in W5) --- */
         .sg-policy-card {
             background: rgba(17,24,39,0.60);
