@@ -1,1 +1,28 @@
+# Secrets
 .env
+.env.local
+*.env.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Streamlit / app runtime
+.streamlit/secrets.toml
+sentinelgate/sentinelgate.db
+*.db-journal
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Agent tooling
+.claude/worktrees/
+operation_output.txt
