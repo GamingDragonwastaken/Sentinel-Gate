@@ -226,13 +226,13 @@ def render_dashboard_panel() -> None:
         if not df_view.empty:
             csv_bytes = df_view.to_csv(index=False).encode("utf-8")
             st.download_button(
-                "📥 Export CSV",
+                "Export CSV",
                 data=csv_bytes,
                 file_name="sentinelgate_audit.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
     with c2:
-        if st.button("🔄 Reset Demo", key="dashboard_reset_demo", use_container_width=True):
+        if st.button("Reset demo", key="dashboard_reset_demo", use_container_width=True):
             _do_reset()
             st.rerun()

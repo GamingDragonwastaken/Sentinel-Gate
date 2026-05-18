@@ -12,6 +12,7 @@ from security.policies import (
     load_sample_policies,
     toggle_policy,
 )
+from ui.icons import LANDMARK
 
 
 _SEVERITY_COLORS = {
@@ -27,8 +28,15 @@ _SEVERITY_COLORS = {
 # ---------------------------------------------------------------------------
 
 def _render_compliance_section() -> None:
-    st.subheader("🏛️ Compliance Policy Packs")
-    st.caption("Pre-built rules from HIPAA, SOC2, and NIST 800-53. Activate with one click.")
+    # st.subheader doesn't render inline HTML; use st.markdown for the SVG.
+    st.markdown(
+        f'<h3 style="display:flex;align-items:center;gap:10px;color:#f8fafc;'
+        f'margin:0 0 4px 0;font-weight:700;font-size:1.5rem;">'
+        f'<span style="color:#00d4ff;display:inline-flex;">{LANDMARK}</span>'
+        f"Compliance policy packs</h3>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Pre-built rules from HIPAA, SOC 2, and NIST 800-53. Activate with one click.")
 
     try:
         from security.compliance_engine import load_compliance_packs
@@ -48,12 +56,14 @@ def _render_compliance_section() -> None:
     for pack in packs:
         c1, c2 = st.columns([4, 1])
         with c1:
-            st.markdown(f"**{getattr(pack, 'icon', '📋')} {getattr(pack, 'framework', '')}**")
+            st.markdown(f"**{getattr(pack, 'framework', '')}**")
             st.caption(f"{getattr(pack, 'rule_count', 0)} rules · {getattr(pack, 'name', '')}")
         with c2:
             is_active = pack.name in st.session_state.active_packs
-            label = "✅ Active" if is_active else "○ Inactive"
-            if st.button(label, key=f"pack_toggle_{pack.name}"):
+            label = "Active" if is_active else "Inactive"
+            if st.button(label, key=f"pack_toggle_{pack.name}",
+                         type="primary" if is_active else "secondary",
+                         use_container_width=True):
                 if is_active:
                     st.session_state.active_packs.remove(pack.name)
                 else:
@@ -66,7 +76,7 @@ def _render_compliance_section() -> None:
 # ---------------------------------------------------------------------------
 
 def _render_create_form() -> None:
-    with st.expander("➕ Add a new policy", expanded=False):
+    with st.expander("Add a new policy", expanded=False):
         name = st.text_input("Policy name", key="new_policy_name")
         text = st.text_area(
             "Policy (plain English)",
@@ -74,7 +84,7 @@ def _render_create_form() -> None:
             height=120,
             placeholder="e.g. Never allow requests that ask for customer SSNs.",
         )
-        if st.button("Add Policy", key="add_policy_btn", type="primary"):
+        if st.button("Add policy", key="add_policy_btn", type="primary"):
             if not name.strip() or not text.strip():
                 st.warning("Both name and policy text are required.")
             else:
@@ -149,8 +159,8 @@ def _render_custom_section() -> None:
 
     if not policies:
         st.info("No policies defined yet.")
-        if st.button("📥 Load Sample Policies", key="load_samples_btn", type="primary"):
-            with st.spinner("Seeding sample policies via Gemini..."):
+        if st.button("Load sample policies", key="load_samples_btn", type="primary"):
+            with st.spinner("Seeding sample policies via Gemini…"):
                 load_sample_policies()
             st.rerun()
 

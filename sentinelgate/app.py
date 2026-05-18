@@ -20,8 +20,9 @@ load_dotenv()
 # `load_dotenv()` has already run (Streamlit Cloud injects secrets into env).
 # ---------------------------------------------------------------------------
 if not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
+    # st.error already prefixes a red alert glyph natively; no emoji needed.
     st.error(
-        "⚠️ GEMINI_API_KEY not configured. "
+        "GEMINI_API_KEY not configured. "
         "Add it to .env locally or to Streamlit secrets on the cloud."
     )
     st.stop()
@@ -41,11 +42,12 @@ from security.inspector import is_lobster_running
 from security.policies import get_active_policies, load_sample_policies
 from ui.chat_panel import render_chat_panel
 from ui.dashboard_panel import render_dashboard_panel
+from ui.icons import DOT_FILLED, DOT_HOLLOW, SHIELD
 from ui.policy_panel import render_policy_panel
 
 
 st.set_page_config(
-    page_title="🛡️ SentinelGate",
+    page_title="SentinelGate — AI Security Gateway",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -561,16 +563,18 @@ def add_custom_css() -> None:
 add_custom_css()
 
 st.markdown(
-    """
+    f"""
     <div class="sg-hero">
       <div class="sg-hero-left">
-        <div class="sg-hero-shield">🛡️</div>
+        <div class="sg-hero-shield">{SHIELD}</div>
         <div>
           <h1 class="sg-hero-title">SentinelGate</h1>
           <div class="sg-hero-sub">Enterprise AI Security Gateway</div>
         </div>
       </div>
-      <div class="sg-hero-status">● PROTECTED</div>
+      <div class="sg-hero-status">
+        <span class="sg-hero-status-dot" aria-hidden="true"></span>PROTECTED
+      </div>
     </div>
     <div class="sg-divider"></div>
     """,
@@ -641,8 +645,9 @@ def _full_reset() -> None:
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.markdown(
-        "<span style='color:#22c55e;font-weight:600;'>🟢 ACTIVE</span> "
-        "<span style='color:#94a3b8;'>System Status</span>",
+        f"<span style='color:#22c55e;font-weight:600;display:inline-flex;"
+        f"align-items:center;gap:6px;'>{DOT_FILLED} ACTIVE</span> "
+        f"<span style='color:#94a3b8;margin-left:6px;'>System Status</span>",
         unsafe_allow_html=True,
     )
 
@@ -653,10 +658,14 @@ with st.sidebar:
         _lobster_up = is_lobster_running()
     except Exception:
         _lobster_up = False
-    _dot = "🟢" if _lobster_up else "⚪"
+    _dot_svg = DOT_FILLED if _lobster_up else DOT_HOLLOW
+    _dot_color = "#22c55e" if _lobster_up else "#64748b"
     _label = "Lobster Trap: running" if _lobster_up else "Lobster Trap: offline (fallback active)"
     st.markdown(
-        f"<span style='color:#94a3b8;font-size:0.9em;'>{_dot} {_label}</span>",
+        f"<span style='color:#94a3b8;font-size:0.9em;display:inline-flex;"
+        f"align-items:center;gap:6px;'>"
+        f"<span style='color:{_dot_color};display:inline-flex;'>{_dot_svg}</span>"
+        f"{_label}</span>",
         unsafe_allow_html=True,
     )
 
@@ -692,13 +701,13 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button("🔄 Reset Demo", key="sidebar_reset_demo", use_container_width=True):
+    if st.button("Reset demo", key="sidebar_reset_demo", use_container_width=True):
         _full_reset()
         st.rerun()
 
 
 chat_tab, policy_tab, dashboard_tab = st.tabs(
-    ["💬 Chat & Inspect", "⚙️ Policy Manager", "📊 Audit Dashboard"]
+    ["Chat & Inspect", "Policy Manager", "Audit Dashboard"]
 )
 
 with chat_tab:

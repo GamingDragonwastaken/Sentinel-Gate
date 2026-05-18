@@ -15,6 +15,13 @@ import streamlit as st
 
 from database.audit_db import get_stats
 from demo.scenarios import SCENARIOS
+from ui.icons import (
+    BAN,
+    CHECK_CIRCLE,
+    CLIPBOARD_CHECK,
+    USER,
+    X_MARK,
+)
 
 
 RISK_COLORS = {
@@ -103,7 +110,7 @@ def _get_threat(prompt: str, intent_label: str) -> dict:
         cache[key] = threat
         return threat
 
-    with st.spinner("🧠 Generating threat intelligence..."):
+    with st.spinner("Generating threat intelligence…"):
         try:
             threat = explain_threat(prompt, intent_label)
         except Exception:
@@ -148,12 +155,12 @@ def _render_assistant_message(msg: dict) -> None:
         if agent_id:
             safe_agent = agent_id.replace("<", "&lt;").replace(">", "&gt;")
             agent_badge = (
-                f'<span class="sg-pill sg-pill-agent">👤 {safe_agent}</span>'
+                f'<span class="sg-pill sg-pill-agent">{USER}{safe_agent}</span>'
             )
         st.markdown(
             f"""<div class="sg-card sg-card-allow">
               <div class="sg-card-header">
-                <span class="sg-pill sg-pill-allow">✅ Allowed</span>
+                <span class="sg-pill sg-pill-allow">{CHECK_CIRCLE}Allowed</span>
                 <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
                 <span class="sg-pill sg-pill-meta">Intent: {intent_safe}</span>
                 {agent_badge}
@@ -172,12 +179,13 @@ def _render_assistant_message(msg: dict) -> None:
         safe_citation = citation.replace("<", "&lt;").replace(">", "&gt;")
         citation_block = (
             f'<div class="sg-card-citation">'
-            f"📋 <b>Compliance:</b> {safe_citation}</div>"
+            f'<span style="display:inline-flex;align-items:center;gap:6px;">'
+            f'{CLIPBOARD_CHECK}<b>Compliance:</b> {safe_citation}</span></div>'
         )
     st.markdown(
         f"""<div class="sg-card sg-card-block">
           <div class="sg-card-header">
-            <span class="sg-pill sg-pill-block">⛔ Blocked</span>
+            <span class="sg-pill sg-pill-block">{BAN}Blocked</span>
             <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
             <span class="sg-pill sg-pill-meta">Intent: {intent_safe}</span>
           </div>
@@ -186,7 +194,7 @@ def _render_assistant_message(msg: dict) -> None:
         </div>""",
         unsafe_allow_html=True,
     )
-    with st.expander("🔍 Gemini Threat Intelligence Report"):
+    with st.expander("Gemini threat intelligence report"):
         _render_threat_report(msg.get("prompt", ""), intent)
 
 
@@ -221,9 +229,9 @@ def _render_risk_monitor() -> None:
 
     if last is not None and getattr(last, "flags", None):
         st.divider()
-        st.markdown("**Active Flags**")
+        st.markdown("**Active flags**")
         chips = "".join(
-            f'<span class="sg-flag-chip">❌ {str(flag).replace("<", "&lt;")}</span>'
+            f'<span class="sg-flag-chip">{X_MARK}{str(flag).replace("<", "&lt;")}</span>'
             for flag in last.flags
         )
         st.markdown(chips, unsafe_allow_html=True)
@@ -281,10 +289,10 @@ def render_chat_panel() -> None:
 
         bc1, bc2 = st.columns(2)
         with bc1:
-            send_clicked = st.button("🚀 Send", use_container_width=True)
+            send_clicked = st.button("Send", use_container_width=True, type="primary")
         with bc2:
             st.selectbox(
-                "⚡ Load Attack Scenario",
+                "Load attack scenario",
                 [_SCENARIO_PLACEHOLDER] + list(SCENARIOS.keys()),
                 key="scenario_choice",
                 label_visibility="collapsed",
@@ -295,7 +303,7 @@ def render_chat_panel() -> None:
             if not prompt:
                 st.warning("Enter a prompt before sending.")
             else:
-                with st.spinner("🛡️ SentinelGate inspecting..."):
+                with st.spinner("SentinelGate inspecting…"):
                     result = process_prompt(
                         prompt,
                         session_id=st.session_state.session_id,
