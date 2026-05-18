@@ -93,6 +93,36 @@ def add_custom_css() -> None:
                          SFMono-Regular, Menlo, Consolas, monospace !important;
             font-feature-settings: 'tnum' on, 'ss01' on;
         }
+        /* CRITICAL: re-impose Material Symbols on Streamlit's icon spans so
+         * the .stApp * wildcard above does NOT break ligature rendering.
+         * Without this rule, every Streamlit icon (expander chevron,
+         * selectbox arrow, text_input clear, st.info prefix) renders its
+         * ligature name as literal text — "arrow_down", "check_circle",
+         * "close" etc. This rule must come AFTER the Geist override so it
+         * wins the cascade despite identical !important weight. */
+        .material-icons,
+        .material-symbols-outlined,
+        .material-symbols-rounded,
+        .material-symbols-sharp,
+        [class*="material-icons"],
+        [class*="material-symbols"],
+        [data-testid="stIconMaterial"],
+        [data-testid="stIconMaterial"] *,
+        [data-testid*="Icon"] [class*="material"] {
+            font-family: 'Material Symbols Outlined',
+                         'Material Symbols Rounded',
+                         'Material Symbols Sharp',
+                         'Material Icons' !important;
+            font-weight: normal !important;
+            font-style: normal !important;
+            font-feature-settings: 'liga' !important;
+            -webkit-font-feature-settings: 'liga' !important;
+            text-transform: none !important;
+            letter-spacing: normal !important;
+            word-wrap: normal !important;
+            white-space: nowrap !important;
+            direction: ltr !important;
+        }
         .sg-hero-title,
         .sg-hero-sub,
         .sg-pill,
