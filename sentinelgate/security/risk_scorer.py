@@ -56,6 +56,7 @@ class GatewayResult:
     response_flagged: bool = False
     block_reason: str = ""
     processing_time_ms: int = 0
+    inspection_ms: float = 0.0
     audit_id: str = ""
     # Informational citation from the compliance pack engine. Populated only
     # when a pack rule matched the prompt; never drives the decision itself.
@@ -84,6 +85,7 @@ def process_prompt(
     threshold = _risk_threshold()
 
     # Step 1 — ingress inspection
+    _t0 = time.perf_counter()
     inspection = inspect_prompt(prompt)
 
     # Step 2 — policy evaluation
@@ -108,6 +110,7 @@ def process_prompt(
             f"Policy violation: {policy_result.policy_name} — "
             f"{policy_result.explanation}"
         )
+    _inspection_ms = round((time.perf_counter() - _t0) * 1000, 1)
 
     # Step 4 — if ALLOW, call the LLM and inspect the response
     response_text = ""
@@ -190,6 +193,7 @@ def process_prompt(
         response_flagged=response_flagged,
         block_reason=block_reason,
         processing_time_ms=elapsed_ms,
+        inspection_ms=_inspection_ms,
         audit_id=audit_id,
         compliance_citation=compliance_citation,
         agent_id=agent_id,

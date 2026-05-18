@@ -144,6 +144,12 @@ def _render_assistant_message(msg: dict) -> None:
     intent = msg.get("intent_label", "")
     agent_id = (msg.get("agent_id") or "").strip()
     citation = (msg.get("compliance_citation") or "").strip()
+    inspection_ms = float(msg.get("inspection_ms") or 0.0)
+    lat_pill = (
+        f'<span class="sg-pill sg-pill-meta">{inspection_ms:.1f}ms</span>'
+        if inspection_ms
+        else ""
+    )
 
     if msg.get("decision") == "ALLOW":
         body = msg.get("response") or "(empty response)"
@@ -158,6 +164,7 @@ def _render_assistant_message(msg: dict) -> None:
                 <span class="sg-pill sg-pill-allow">{CHECK_CIRCLE}Allowed</span>
                 <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
                 <span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>
+                {lat_pill}
                 {agent_badge}
               </div>
               <div class="sg-card-body">{_e(body)}</div>
@@ -181,6 +188,7 @@ def _render_assistant_message(msg: dict) -> None:
             <span class="sg-pill sg-pill-block">{BAN}Blocked</span>
             <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
             <span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>
+            {lat_pill}
           </div>
           <div class="sg-card-body">{_e(reason)}</div>
           {citation_block}
@@ -317,6 +325,7 @@ def render_chat_panel() -> None:
                         "flags": list(result.flags),
                         "agent_id": getattr(result, "agent_id", agent_id),
                         "compliance_citation": getattr(result, "compliance_citation", ""),
+                        "inspection_ms": getattr(result, "inspection_ms", 0.0),
                     }
                 )
                 st.session_state.last_result = result
