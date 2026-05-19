@@ -186,6 +186,9 @@ def _render_assistant_message(msg: dict) -> None:
             f'<span style="display:inline-flex;align-items:center;gap:6px;">'
             f'{CLIPBOARD_CHECK}<b>Compliance:</b> {_e(citation)}</span></div>'
         )
+    block_content = f'<div class="sg-card-body">{_e(reason)}</div>'
+    if citation_block:
+        block_content += citation_block
     st.markdown(
         f"""<div class="sg-card sg-card-block">
           <div class="sg-card-header">
@@ -194,8 +197,7 @@ def _render_assistant_message(msg: dict) -> None:
             <span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>
             {lat_pill}
           </div>
-          <div class="sg-card-body">{_e(reason)}</div>
-          {citation_block}
+          {block_content}
         </div>""",
         unsafe_allow_html=True,
     )
