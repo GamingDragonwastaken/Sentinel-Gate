@@ -162,21 +162,19 @@ def _render_assistant_message(msg: dict) -> None:
             agent_badge = (
                 f'<span class="sg-pill sg-pill-agent">{USER}{_e(agent_id)}</span>'
             )
-        card_html = "".join(
-            [
-                '<div class="sg-card sg-card-allow">',
-                '<div class="sg-card-header">',
-                f'<span class="sg-pill sg-pill-allow">{CHECK_CIRCLE}Allowed</span>',
-                f'<span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>',
-                f'<span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>',
-                lat_pill,
-                agent_badge,
-                "</div>",
-                f'<div class="sg-card-body">{_e(body)}</div>',
-                "</div>",
-            ]
+        st.markdown(
+            f"""<div class="sg-card sg-card-allow">
+              <div class="sg-card-header">
+                <span class="sg-pill sg-pill-allow">{CHECK_CIRCLE}Allowed</span>
+                <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
+                <span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>
+                {lat_pill}
+                {agent_badge}
+              </div>
+              <div class="sg-card-body">{_e(body)}</div>
+            </div>""",
+            unsafe_allow_html=True,
         )
-        st.markdown(card_html, unsafe_allow_html=True)
         return
 
     # BLOCK
@@ -188,21 +186,19 @@ def _render_assistant_message(msg: dict) -> None:
             f'<span style="display:inline-flex;align-items:center;gap:6px;">'
             f'{CLIPBOARD_CHECK}<b>Compliance:</b> {_e(citation)}</span></div>'
         )
-    card_html = "".join(
-        [
-            '<div class="sg-card sg-card-block">',
-            '<div class="sg-card-header">',
-            f'<span class="sg-pill sg-pill-block">{BAN}Blocked</span>',
-            f'<span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>',
-            f'<span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>',
-            lat_pill,
-            "</div>",
-            f'<div class="sg-card-body">{_e(reason)}</div>',
-            citation_block,
-            "</div>",
-        ]
+    st.markdown(
+        f"""<div class="sg-card sg-card-block">
+          <div class="sg-card-header">
+            <span class="sg-pill sg-pill-block">{BAN}Blocked</span>
+            <span class="sg-pill sg-pill-meta">Risk {score:.2f}</span>
+            <span class="sg-pill sg-pill-meta">Intent: {_e(intent)}</span>
+            {lat_pill}
+          </div>
+          <div class="sg-card-body">{_e(reason)}</div>
+          {citation_block}
+        </div>""",
+        unsafe_allow_html=True,
     )
-    st.markdown(card_html, unsafe_allow_html=True)
     with st.expander("Gemini threat intelligence report"):
         _render_threat_report(msg.get("prompt", ""), intent)
 
