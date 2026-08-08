@@ -1,5 +1,12 @@
 # SentinelGate — Enterprise AI Security Gateway
 
+> **Scope note.** SentinelGate is a demonstrator of an inspect → policy →
+> decision → audit architecture, not a production security certification. The
+> current `main` includes a deterministic local offline demo and a 7-test
+> contract suite covering fail-closed ingress/egress, indeterminate policy
+> evaluation, threshold handling, audit persistence, and synthetic attack/safe
+> paths. No test asserts security against a live production deployment.
+
 **[Live Demo](https://sentinel-gate.streamlit.app/)** · Built for *Transforming Enterprise Through AI* (lablab.ai · May 2026) · Track 1: Agent Security & AI Governance · sponsored by **Veea**
 
 ![SentinelGate — idle state](docs/screenshots/sentinelgate-v2-hero-idle.png)
@@ -203,8 +210,9 @@ python -m unittest discover -v tests
 
 ## Status
 
-- Current local branch replaces the deprecated Gemini SDK with `google-genai` and keeps the model adapter's retry/error contract.
-- Security pipeline now records `policy_status`, fails closed on unavailable or indeterminate inspection, clamps thresholds, and redacts blocked responses.
+- `main` replaces the deprecated Gemini SDK with `google-genai` and keeps the model adapter's retry/error contract.
+- The security pipeline records `policy_status`, fails closed on unavailable or indeterminate inspection, clamps thresholds, and redacts blocked responses.
+- `python -m unittest discover -s tests -v` passed 7/7 local contract tests on 2026-08-09.
 - Local offline demo mode exercises safe, policy, injection, audit, and response-review paths without pretending to be a live model.
 - v2 visual chrome live on `main` — glassmorphism cards, gradient hero, Geist typography, full SVG icon set
 - Three cached attack scenarios shipped (`Attack: prompt injection`, `Attack: data exfiltration`, `Attack: policy violation`, `Attack: HIPAA violation`, `Baseline: safe query`)
