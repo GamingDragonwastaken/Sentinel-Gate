@@ -157,6 +157,22 @@ For Lobster Trap (optional but recommended — provides the real DPI inspection 
 python sentinelgate/setup_lobster.py   # downloads the binary for your OS
 ```
 
+### Local offline demo
+
+The app opens without an API key. It shows an explicit `OFFLINE DEMO` status
+and uses deterministic synthetic rules for the shipped safe and attack
+scenarios; no request leaves the machine. This mode is for reviewing the UI and
+audit workflow, not for real security decisions. Configure a real key and set
+`SENTINELGATE_DEMO_MODE=0` before handling real traffic.
+
+The local security contract suite covers fail-closed ingress/egress behavior,
+indeterminate policy results, inclusive thresholds, audit-schema migrations,
+and the offline demo allow/block paths:
+
+```bash
+python -m unittest discover -v tests
+```
+
 ---
 
 ## Architecture notes
@@ -187,6 +203,9 @@ python sentinelgate/setup_lobster.py   # downloads the binary for your OS
 
 ## Status
 
+- Current local branch replaces the deprecated Gemini SDK with `google-genai` and keeps the model adapter's retry/error contract.
+- Security pipeline now records `policy_status`, fails closed on unavailable or indeterminate inspection, clamps thresholds, and redacts blocked responses.
+- Local offline demo mode exercises safe, policy, injection, audit, and response-review paths without pretending to be a live model.
 - v2 visual chrome live on `main` — glassmorphism cards, gradient hero, Geist typography, full SVG icon set
 - Three cached attack scenarios shipped (`Attack: prompt injection`, `Attack: data exfiltration`, `Attack: policy violation`, `Attack: HIPAA violation`, `Baseline: safe query`)
 - HIPAA / SOC 2 / Enterprise compliance packs preloaded — 62 rules total

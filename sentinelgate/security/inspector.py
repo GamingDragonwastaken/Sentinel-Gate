@@ -10,6 +10,7 @@ import logging
 import os
 import subprocess
 import time
+from pathlib import Path
 
 import requests
 
@@ -28,10 +29,11 @@ class InspectionResult:
 
 LOBSTER_PORT = int(os.getenv("LOBSTER_PORT", "8765"))
 LOBSTER_URL = f"http://localhost:{LOBSTER_PORT}"
-LOBSTER_BINARY = "bin/lobstertrap.exe" if os.name == "nt" else "bin/lobstertrap"
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LOBSTER_BINARY = str(_PROJECT_ROOT / "bin" / ("lobstertrap.exe" if os.name == "nt" else "lobstertrap"))
 LOBSTER_BACKEND = "https://generativelanguage.googleapis.com/v1beta/openai/"
-LOBSTER_POLICY = "configs/default_policy.yaml"
-LOBSTER_AUDIT_LOG = "audit.json"
+LOBSTER_POLICY = str(_PROJECT_ROOT / "configs" / "default_policy.yaml")
+LOBSTER_AUDIT_LOG = str(_PROJECT_ROOT / "audit.json")
 
 _HEALTH_PATHS = ("/health", "/v1/models")
 _HEALTH_ATTEMPTS = 10
@@ -39,6 +41,11 @@ _HEALTH_INTERVAL_SEC = 0.5
 
 _lobster_process: subprocess.Popen | None = None
 _log = logging.getLogger("sentinelgate.inspector")
+
+
+def demo_mode_enabled() -> bool:
+    """Return whether the explicitly local, synthetic inspector is enabled."""
+    return os.getenv("SENTINELGATE_DEMO_MODE", "").lower() in {"1", "true", "yes", "on"}
 
 
 GEMINI_INSPECTION_PROMPT = """
@@ -120,7 +127,7 @@ def is_lobster_running() -> bool:
     for path in _HEALTH_PATHS:
         try:
             resp = requests.get(f"{LOBSTER_URL}{path}", timeout=0.5)
-            if resp.status_code < 500:
+            if resp.status_code < 400:
                 return True
         except requests.RequestException:
             continue
@@ -264,23 +271,57 @@ def _inspect_via_gemini(text: str) -> InspectionResult:
     return _coerce(verdict)
 
 
+_DEMO_RULES = (
+    ("prompt_injection", ("ignore all previous", "developer mode", "system prompt", "override instructions"), ("injection_detected", "override_attempt"), 0.96),
+    ("data_exfiltration", ("ssn", "social security", "customer names", "email addresses", "bulk export"), ("pii_request", "bulk_data_request"), 0.94),
+    ("credential_theft", ("password", "api key", "secret", "token"), ("credential_request",), 0.92),
+    ("policy_violation", ("revenue figures", "financial projections", "ebitda", "profit margin"), ("financial_data_request",), 0.88),
+)
+
+
+def _inspect_demo(text: str) -> InspectionResult:
+    """Classify the shipped scenarios locally; no network or model is used."""
+    normalized = text.casefold()
+    for label, needles, flags, score in _DEMO_RULES:
+        matches = [needle for needle in needles if needle in normalized]
+        if matches:
+            return InspectionResult(
+                risk_score=score,
+                intent_label=label,
+                intent_description=f"Synthetic local rule matched: {matches[0]}",
+                flags=list(flags),
+                response_flagged=True,
+                raw_output={"engine": "local-demo", "synthetic": True, "matches": matches},
+            )
+    return InspectionResult(
+        risk_score=0.08,
+        intent_label="normal",
+        intent_description="Synthetic local rule found no known threat indicators.",
+        flags=[],
+        response_flagged=False,
+        raw_output={"engine": "local-demo", "synthetic": True},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API — try Lobster, fall back to Gemini
 # ---------------------------------------------------------------------------
 
 def _lobster_unavailable_result() -> InspectionResult:
     return InspectionResult(
-        risk_score=0.1,
-        intent_label="lobster_unavailable",
-        intent_description="Lobster Trap proxy not reachable; permissive default applied.",
+        risk_score=1.0,
+        intent_label="inspection_unavailable",
+        intent_description="No inspection engine produced a trustworthy verdict; failing closed.",
         flags=[],
-        response_flagged=False,
-        raw_output={"lobster_running": False},
+        response_flagged=True,
+        raw_output={"lobster_running": False, "indeterminate": True},
     )
 
 
 def inspect_prompt(prompt: str) -> InspectionResult:
     """Inspect an inbound prompt. Returns an InspectionResult, never raises."""
+    if demo_mode_enabled():
+        return _inspect_demo(prompt)
     if is_lobster_running():
         verdict = _inspect_via_lobster(prompt, direction="ingress")
         if verdict is not None:
@@ -298,6 +339,8 @@ def inspect_prompt(prompt: str) -> InspectionResult:
 
 def inspect_response(response_text: str) -> InspectionResult:
     """Inspect an outbound model response. Mirrors `inspect_prompt`."""
+    if demo_mode_enabled():
+        return _inspect_demo(response_text)
     if is_lobster_running():
         verdict = _inspect_via_lobster(response_text, direction="egress")
         if verdict is not None:

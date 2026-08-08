@@ -13,7 +13,8 @@ import os
 import re
 import time
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # Rate-limit retry policy. One retry (= 2 total attempts), 2-second pause.
 _RATE_LIMIT_MAX_RETRIES = 1
@@ -25,22 +26,27 @@ LOBSTER_PORT = int(os.getenv("LOBSTER_PORT", "8765"))
 LOBSTER_BASE_URL = f"http://localhost:{LOBSTER_PORT}/v1"
 
 
-def _configure() -> str | None:
+def _api_key() -> str | None:
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         return (
-            "[gemini_error] Missing API key. Set GEMINI_API_KEY (or GOOGLE_API_KEY) "
-            "in your environment/.env and retry."
+            None
         )
-    genai.configure(api_key=api_key)
-    return None
+    return api_key
 
 
-def _model(system_prompt: str | None = None):
-    kwargs = {}
-    if system_prompt:
-        kwargs["system_instruction"] = system_prompt
-    return genai.GenerativeModel(MODEL_NAME, **kwargs)
+def _client():
+    api_key = _api_key()
+    if not api_key:
+        return None
+    return genai.Client(api_key=api_key)
+
+
+def _missing_key_message() -> str:
+    return (
+        "[gemini_error] Missing API key. Set GEMINI_API_KEY (or GOOGLE_API_KEY) "
+        "in your environment/.env and retry."
+    )
 
 
 def _format_exception(exc: Exception) -> str:
@@ -74,7 +80,12 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     )
 
 
-def call_gemini(prompt: str, system_prompt: str | None = None) -> str:
+def call_gemini(
+    prompt: str,
+    system_prompt: str | None = None,
+    *,
+    json_mode: bool = False,
+) -> str:
     """Send `prompt` to Gemini Flash and return the response text.
 
     On a 429 / quota error, sleeps `_RATE_LIMIT_DELAY_S` and retries once.
@@ -83,14 +94,25 @@ def call_gemini(prompt: str, system_prompt: str | None = None) -> str:
     failures. Any other exception (auth, network, safety block) is caught
     and returned as a `[gemini_error] ...` string. Never raises.
     """
-    config_error = _configure()
-    if config_error:
-        return config_error
+    client = _client()
+    if client is None:
+        return _missing_key_message()
+
+    config_kwargs = {}
+    if system_prompt:
+        config_kwargs["system_instruction"] = system_prompt
+    if json_mode:
+        config_kwargs["response_mime_type"] = "application/json"
+    config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
 
     last_exc: Exception | None = None
     for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
         try:
-            response = _model(system_prompt).generate_content(prompt)
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=config,
+            )
             return getattr(response, "text", "") or ""
         except Exception as exc:  # pragma: no cover - network-dependent
             last_exc = exc
@@ -129,7 +151,7 @@ def call_gemini_json(prompt: str, system_prompt: str | None = None) -> dict:
     decisions (fail-closed) but can use the distinction for logging,
     metrics, and retry strategy.
     """
-    raw = call_gemini(prompt, system_prompt=system_prompt)
+    raw = call_gemini(prompt, system_prompt=system_prompt, json_mode=True)
     if raw.startswith("[gemini_error]"):
         return {"error": "api_failed", "raw": raw}
     if raw.startswith("[rate_limited]"):

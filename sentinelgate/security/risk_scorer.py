@@ -18,7 +18,7 @@ from datetime import datetime
 
 from database.audit_db import log_request
 from llm.gemini_client import call_gemini_via_lobster
-from security.inspector import inspect_prompt, inspect_response
+from security.inspector import demo_mode_enabled, inspect_prompt, inspect_response
 from security.policies import (
     check_prompt_against_policies,
     get_active_policies,
@@ -40,6 +40,7 @@ _log = logging.getLogger("sentinelgate.gateway")
 
 DEFAULT_RISK_THRESHOLD = 0.7
 RESPONSE_RISK_THRESHOLD = 0.7
+MAX_PROMPT_CHARS = 8_000
 
 
 @dataclass
@@ -52,6 +53,7 @@ class GatewayResult:
     policy_violated: bool = False
     policy_name: str = ""
     policy_explanation: str = ""
+    policy_status: str = "allowed"
     response: str = ""
     response_flagged: bool = False
     block_reason: str = ""
@@ -66,7 +68,7 @@ class GatewayResult:
 
 def _risk_threshold() -> float:
     try:
-        return float(os.getenv("RISK_THRESHOLD", str(DEFAULT_RISK_THRESHOLD)))
+        return max(0.0, min(1.0, float(os.getenv("RISK_THRESHOLD", str(DEFAULT_RISK_THRESHOLD)))))
     except (TypeError, ValueError):
         return DEFAULT_RISK_THRESHOLD
 
@@ -82,11 +84,33 @@ def process_prompt(
 ) -> GatewayResult:
     """Run the full security pipeline against a single user prompt."""
     started = time.perf_counter()
+    if not isinstance(prompt, str):
+        prompt = str(prompt or "")
+    prompt = prompt.strip()
     threshold = _risk_threshold()
 
     # Step 1 — ingress inspection
     _t0 = time.perf_counter()
-    inspection = inspect_prompt(prompt)
+    if not prompt:
+        from security.inspector import InspectionResult
+        inspection = InspectionResult(
+            risk_score=1.0,
+            intent_label="invalid_input",
+            intent_description="Empty prompts are not eligible for model execution.",
+            flags=["invalid_input"],
+            response_flagged=True,
+        )
+    elif len(prompt) > MAX_PROMPT_CHARS:
+        from security.inspector import InspectionResult
+        inspection = InspectionResult(
+            risk_score=1.0,
+            intent_label="input_too_large",
+            intent_description=f"Prompt exceeds the {MAX_PROMPT_CHARS}-character gateway limit.",
+            flags=["input_too_large"],
+            response_flagged=True,
+        )
+    else:
+        inspection = inspect_prompt(prompt)
 
     # Step 2 — policy evaluation
     policies = get_active_policies()
@@ -95,15 +119,18 @@ def process_prompt(
     # Step 3 — decision gate (fail-closed posture)
     decision = "ALLOW"
     block_reason = ""
-    if inspection.intent_label == "inspection_unavailable":
+    if inspection.intent_label in {"inspection_unavailable", "lobster_unavailable"}:
         decision = "BLOCK"
-        block_reason = "Inspection unavailable — failing closed for security"
-    elif inspection.risk_score > threshold:
+        block_reason = "Inspection unavailable; failing closed for security"
+    elif inspection.risk_score >= threshold:
         decision = "BLOCK"
         block_reason = (
-            f"Risk score {inspection.risk_score:.2f} exceeds threshold "
+            f"Risk score {inspection.risk_score:.2f} meets or exceeds threshold "
             f"{threshold:.2f} ({inspection.intent_label})"
         )
+    elif policy_result.indeterminate:
+        decision = "BLOCK"
+        block_reason = "Policy evaluation is indeterminate; failing closed for security"
     elif policy_result.violated:
         decision = "BLOCK"
         block_reason = (
@@ -116,9 +143,15 @@ def process_prompt(
     response_text = ""
     response_flagged = False
     if decision == "ALLOW":
-        response_text = call_gemini_via_lobster(prompt) or ""
+        if demo_mode_enabled():
+            response_text = (
+                "Synthetic SentinelGate response: the request passed the local "
+                "policy and inspection checks."
+            )
+        else:
+            response_text = call_gemini_via_lobster(prompt) or ""
         response_inspection = inspect_response(response_text)
-        response_flagged = response_inspection.risk_score > RESPONSE_RISK_THRESHOLD
+        response_flagged = response_inspection.intent_label in {"inspection_unavailable", "lobster_unavailable"} or response_inspection.risk_score >= RESPONSE_RISK_THRESHOLD
         if response_flagged:
             decision = "BLOCK"
             block_reason = (
@@ -168,6 +201,7 @@ def process_prompt(
         "flags": list(inspection.flags),
         "decision": decision,
         "policy_violated": 1 if policy_result.violated else 0,
+        "policy_status": policy_result.status,
         "policy_name": policy_result.policy_name,
         "policy_explanation": policy_result.explanation,
         "response_preview": (response_text or "")[:200],
@@ -189,6 +223,7 @@ def process_prompt(
         policy_violated=policy_result.violated,
         policy_name=policy_result.policy_name,
         policy_explanation=policy_result.explanation,
+        policy_status=policy_result.status,
         response=response_text,
         response_flagged=response_flagged,
         block_reason=block_reason,

@@ -6,12 +6,14 @@ flat to make ad-hoc analysis (Pandas / SQL) trivial.
 """
 
 import json
+import os
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "sentinelgate.db"
+DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "sentinelgate.db"
 
 _AUDIT_SCHEMA = """
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -27,6 +29,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     flags TEXT,
     decision TEXT,
     policy_violated INTEGER,
+    policy_status TEXT,
     policy_name TEXT,
     policy_explanation TEXT,
     response_preview TEXT,
@@ -47,10 +50,14 @@ CREATE TABLE IF NOT EXISTS policies (
 """
 
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DB_PATH))
+@contextmanager
+def _connect():
+    conn = sqlite3.connect(os.getenv("SENTINELGATE_DB_PATH", str(DEFAULT_DB_PATH)))
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
@@ -65,6 +72,8 @@ def init_db() -> None:
         existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(audit_log)").fetchall()}
         if "agent_id" not in existing_cols:
             conn.execute("ALTER TABLE audit_log ADD COLUMN agent_id TEXT")
+        if "policy_status" not in existing_cols:
+            conn.execute("ALTER TABLE audit_log ADD COLUMN policy_status TEXT DEFAULT 'allowed'")
         conn.commit()
 
 
@@ -92,6 +101,7 @@ def log_request(data: dict) -> str:
         flags,
         data.get("decision"),
         int(data.get("policy_violated", 0)),
+        data.get("policy_status", "allowed"),
         data.get("policy_name"),
         data.get("policy_explanation"),
         data.get("response_preview"),
@@ -104,9 +114,9 @@ def log_request(data: dict) -> str:
             INSERT INTO audit_log (
                 id, timestamp, session_id, agent_id, prompt_hash, prompt_preview,
                 risk_score, intent_label, intent_description, flags,
-                decision, policy_violated, policy_name, policy_explanation,
-                response_preview, processing_time_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                decision, policy_violated, policy_status, policy_name,
+                policy_explanation, response_preview, processing_time_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             payload,
         )
@@ -117,9 +127,10 @@ def log_request(data: dict) -> str:
 
 def get_recent_logs(limit: int = 50) -> list[dict]:
     """Return the most recent audit rows as a list of dicts (newest first)."""
+    limit = max(1, min(int(limit), 500))
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?",
+            "SELECT * FROM audit_log ORDER BY timestamp DESC, rowid DESC LIMIT ?",
             (limit,),
         ).fetchall()
 

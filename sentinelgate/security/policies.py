@@ -16,6 +16,8 @@ Persistence is delegated to `database.audit_db`, which owns the schema.
 from __future__ import annotations
 
 import json
+import os
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -52,6 +54,11 @@ class PolicyCheckResult:
     policy_id: str = ""
     policy_name: str = ""
     explanation: str = ""
+    status: str = "allowed"
+
+    @property
+    def indeterminate(self) -> bool:
+        return self.status == "indeterminate"
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +79,25 @@ _POLICY_CHECK_INSTRUCTIONS = (
 )
 
 _ALLOWED_SEVERITIES = {"low", "medium", "high", "critical"}
+_DEMO_STOPWORDS = {
+    "never", "allow", "block", "reject", "requests", "request", "that", "ask",
+    "about", "other", "confidential", "information", "such", "their", "your",
+    "this", "with", "from", "into", "they", "any", "prompt",
+}
+
+
+def _demo_mode_enabled() -> bool:
+    return os.getenv("SENTINELGATE_DEMO_MODE", "").lower() in {"1", "true", "yes", "on"}
+
+
+def _local_policy_metadata(text: str) -> tuple[list[str], str]:
+    terms = [
+        token for token in re.findall(r"[a-z0-9][a-z0-9 -]{2,}", text.casefold())
+        if token not in _DEMO_STOPWORDS and len(token) >= 4
+    ]
+    unique = list(dict.fromkeys(terms))[:10]
+    severity = "high" if any(term in text.casefold() for term in ("ssn", "password", "secret", "override")) else "medium"
+    return unique, severity
 
 
 # ---------------------------------------------------------------------------
@@ -104,10 +130,15 @@ def _policy_to_row(policy: Policy) -> dict:
 
 def _extract_keywords_and_severity(natural_language: str) -> tuple[list[str], str]:
     """Ask Gemini for the keywords + severity; degrade gracefully on failure."""
-    verdict = call_gemini_json(
-        f"POLICY:\n{natural_language}",
-        system_prompt=_KEYWORD_EXTRACTION_PROMPT,
-    )
+    if _demo_mode_enabled():
+        return _local_policy_metadata(natural_language)
+    try:
+        verdict = call_gemini_json(
+            f"POLICY:\n{natural_language}",
+            system_prompt=_KEYWORD_EXTRACTION_PROMPT,
+        )
+    except Exception:
+        return [], "medium"
     if not isinstance(verdict, dict) or "error" in verdict:
         return [], "medium"
 
@@ -128,6 +159,10 @@ def _extract_keywords_and_severity(natural_language: str) -> tuple[list[str], st
 
 def create_policy(name: str, natural_language: str) -> Policy:
     """Create + persist a Policy. Gemini fills in keywords/severity."""
+    if not name or not name.strip():
+        raise ValueError("policy name is required")
+    if not natural_language or not natural_language.strip():
+        raise ValueError("policy description is required")
     keywords, severity = _extract_keywords_and_severity(natural_language)
     policy = Policy(
         name=name.strip(),
@@ -158,7 +193,30 @@ def check_prompt_against_policies(
             policy_id="",
             policy_name="",
             explanation="No policies active",
+            status="allowed",
         )
+
+    if _demo_mode_enabled():
+        prompt_lower = prompt.casefold()
+        for policy in policies:
+            terms = list(policy.enforcement_keywords)
+            name_lower = policy.name.casefold()
+            if "pii" in name_lower:
+                terms += ["ssn", "email address", "phone number", "home address"]
+            elif "financial" in name_lower:
+                terms += ["revenue", "financial projection", "ebitda", "profit margin"]
+            elif "injection" in name_lower:
+                terms += ["ignore all previous", "developer mode", "system prompt", "override"]
+            matches = [term for term in terms if term and term.casefold() in prompt_lower]
+            if matches:
+                return PolicyCheckResult(
+                    violated=True,
+                    policy_id=policy.id,
+                    policy_name=policy.name,
+                    explanation=f"Synthetic local policy matched: {matches[0]}",
+                    status="blocked",
+                )
+        return PolicyCheckResult(violated=False, explanation="Synthetic local policy checks passed", status="allowed")
 
     policy_lines = []
     for p in policies:
@@ -172,17 +230,37 @@ def check_prompt_against_policies(
         f"POLICIES:\n" + "\n".join(policy_lines)
     )
 
-    verdict = call_gemini_json(user_prompt, system_prompt=_POLICY_CHECK_INSTRUCTIONS)
+    try:
+        verdict = call_gemini_json(user_prompt, system_prompt=_POLICY_CHECK_INSTRUCTIONS)
+    except Exception:
+        return PolicyCheckResult(
+            violated=False,
+            explanation="check_failed: policy provider unavailable",
+            status="indeterminate",
+        )
 
     if not isinstance(verdict, dict) or "error" in verdict:
         return PolicyCheckResult(
             violated=False,
             policy_id="",
             policy_name="",
-            explanation="check_failed",
+            explanation="check_failed: policy provider returned an unavailable result",
+            status="indeterminate",
         )
 
-    violated = bool(verdict.get("violated", False))
+    raw_violated = verdict.get("violated", False)
+    if isinstance(raw_violated, bool):
+        violated = raw_violated
+    elif isinstance(raw_violated, str) and raw_violated.strip().lower() in {"true", "yes", "1"}:
+        violated = True
+    elif isinstance(raw_violated, str) and raw_violated.strip().lower() in {"false", "no", "0"}:
+        violated = False
+    else:
+        return PolicyCheckResult(
+            violated=False,
+            explanation="check_failed: policy provider returned a non-boolean verdict",
+            status="indeterminate",
+        )
     policy_id = str(verdict.get("policy_id") or "")
     policy_name = str(verdict.get("policy_name") or "")
     explanation = str(verdict.get("explanation") or "")
@@ -201,6 +279,7 @@ def check_prompt_against_policies(
                     policy_id="",
                     policy_name="",
                     explanation=f"check_unmatched: {explanation}"[:300],
+                    status="indeterminate",
                 )
 
     return PolicyCheckResult(
@@ -208,6 +287,7 @@ def check_prompt_against_policies(
         policy_id=policy_id,
         policy_name=policy_name,
         explanation=explanation,
+        status="blocked" if violated else "allowed",
     )
 
 

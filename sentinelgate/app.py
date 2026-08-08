@@ -19,13 +19,12 @@ load_dotenv()
 # Streamlit's secrets.toml on the cloud is exposed via os.getenv after
 # `load_dotenv()` has already run (Streamlit Cloud injects secrets into env).
 # ---------------------------------------------------------------------------
-if not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
-    # st.error already prefixes a red alert glyph natively; no emoji needed.
-    st.error(
-        "GEMINI_API_KEY not configured. "
-        "Add it to .env locally or to Streamlit secrets on the cloud."
-    )
-    st.stop()
+_has_gemini_key = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+_demo_mode = os.getenv("SENTINELGATE_DEMO_MODE", "1" if not _has_gemini_key else "0").lower() in {
+    "1", "true", "yes", "on"
+}
+if _demo_mode and not _has_gemini_key:
+    os.environ["SENTINELGATE_DEMO_MODE"] = "1"
 
 
 # Item 5 — SQLite persistence note (and trigger init via the import below).
@@ -676,6 +675,12 @@ def add_custom_css() -> None:
 
 add_custom_css()
 
+if _demo_mode and not _has_gemini_key:
+    st.warning(
+        "Offline demo mode: inspections, policy checks, and responses are synthetic and local. "
+        "Set GEMINI_API_KEY and SENTINELGATE_DEMO_MODE=0 before handling real traffic."
+    )
+
 st.markdown(
     f"""
     <div class="sg-hero">
@@ -687,7 +692,7 @@ st.markdown(
         </div>
       </div>
       <div class="sg-hero-status">
-        <span class="sg-hero-status-dot" aria-hidden="true"></span>PROTECTED
+        <span class="sg-hero-status-dot" aria-hidden="true"></span>{"OFFLINE DEMO" if _demo_mode and not _has_gemini_key else "PROTECTED"}
       </div>
     </div>
     <div class="sg-divider"></div>
@@ -774,7 +779,10 @@ with st.sidebar:
         _lobster_up = False
     _dot_svg = DOT_FILLED if _lobster_up else DOT_HOLLOW
     _dot_color = "#22c55e" if _lobster_up else "#64748b"
-    _label = "Lobster Trap: running" if _lobster_up else "Lobster Trap: offline (fallback active)"
+    if _demo_mode and not _has_gemini_key:
+        _label = "Local demo inspector: active"
+    else:
+        _label = "Lobster Trap: running" if _lobster_up else "Lobster Trap: offline (fallback active)"
     st.markdown(
         f"<span style='color:#94a3b8;font-size:0.9em;display:inline-flex;"
         f"align-items:center;gap:6px;'>"
@@ -808,7 +816,7 @@ with st.sidebar:
 
     st.markdown(
         "<span style='color:#64748b;font-size:0.78em;'>"
-        "Powered by Veea Lobster Trap + Gemini Flash"
+        "Local deterministic demo" if _demo_mode and not _has_gemini_key else "Powered by Veea Lobster Trap + Gemini Flash"
         "</span>",
         unsafe_allow_html=True,
     )
