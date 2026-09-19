@@ -17,7 +17,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "streamlit>=1.35.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
     "google-genai>=1.0.0",
     "python-dotenv>=1.0.0",
     "pandas>=2.0.0",
@@ -28,6 +29,9 @@ dependencies = [
 
 [project.scripts]
 sentinelgate = "sentinelgate.cli:main"
+
+[tool.setuptools.package-data]
+"*" = ["*.*"]
 
 [tool.setuptools.packages.find]
 include = ["sentinelgate*"]

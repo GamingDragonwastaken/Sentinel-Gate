@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+import uvicorn
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "start":
@@ -9,14 +10,9 @@ def main():
         setup_script = Path(__file__).parent / "setup_lobster.py"
         subprocess.run([sys.executable, str(setup_script)], check=True)
 
-        # Start streamlit
-        app_script = Path(__file__).parent / "app.py"
-        print(f"Starting SentinelGate via Streamlit from {app_script}...")
-
-        # Run streamlit from the sentinelgate directory
-        current_env = os.environ.copy()
-        current_dir = Path(__file__).parent
-        subprocess.run(["streamlit", "run", "app.py"], cwd=str(current_dir), env=current_env)
+        # Start uvicorn
+        print(f"Starting SentinelGate Backend API...")
+        uvicorn.run("sentinelgate.api.server:app", host="0.0.0.0", port=8501, reload=False)
     else:
         print("Usage: sentinelgate start")
 

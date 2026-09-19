@@ -15,4 +15,4 @@ if [ -z "$GEMINI_API_KEY" ] && [ -z "$GOOGLE_API_KEY" ]; then
 fi
 
 echo "Starting SentinelGate..."
-cd sentinelgate && streamlit run app.py
+sentinelgate start

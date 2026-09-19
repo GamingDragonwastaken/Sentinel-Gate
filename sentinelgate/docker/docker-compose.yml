@@ -3,8 +3,8 @@ version: '3.8'
 services:
   sentinelgate:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../..
+      dockerfile: sentinelgate/docker/Dockerfile
     ports:
       - "8501:8501"
     environment:
