@@ -1,0 +1,35 @@
+/* Custom scrollbar for modern feel */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(7,11,20,0.5);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 212, 255, 0.2);
+    border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 212, 255, 0.4);
+}
+
+.sg-glow-cyan {
+    filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.5));
+}
+
+.sg-glow-red {
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.5));
+}
+
+.metric-card {
+    transition: all 0.2s ease;
+}
+.metric-card:hover {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255,255,255,0.05);
+    transform: translateY(-2px);
+}
+
+textarea {
+    transition: height 0.2s ease;
+}

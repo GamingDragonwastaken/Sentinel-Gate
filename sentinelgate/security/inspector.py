@@ -14,7 +14,7 @@ from pathlib import Path
 
 import requests
 
-from llm.gemini_client import call_gemini_json
+from sentinelgate.llm.gemini_client import call_gemini_json
 
 
 @dataclass

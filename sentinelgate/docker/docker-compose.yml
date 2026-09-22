@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  sentinelgate:
+    build:
+      context: ../..
+      dockerfile: sentinelgate/docker/Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      # You can put your actual API key here, or pass it in via `.env`
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - SENTINELGATE_DEMO_MODE=0
+      # Use a persistent database volume for SQLite
+      - SENTINELGATE_DB_PATH=/data/sentinelgate.db
+    volumes:
+      - sentinelgate_data:/data
+
+volumes:
+  sentinelgate_data:

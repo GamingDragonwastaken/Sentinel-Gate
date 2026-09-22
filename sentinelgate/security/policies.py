@@ -23,8 +23,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from llm.gemini_client import call_gemini_json
-from database.audit_db import (
+from sentinelgate.llm.gemini_client import call_gemini_json
+from sentinelgate.database.audit_db import (
     insert_policy_row,
     fetch_policies_rows,
     update_policy_active,

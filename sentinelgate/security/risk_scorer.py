@@ -16,10 +16,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from database.audit_db import log_request
-from llm.gemini_client import call_gemini_via_lobster
-from security.inspector import demo_mode_enabled, inspect_prompt, inspect_response
-from security.policies import (
+from sentinelgate.database.audit_db import log_request
+from sentinelgate.llm.gemini_client import call_gemini_via_lobster
+from sentinelgate.security.inspector import demo_mode_enabled, inspect_prompt, inspect_response
+from sentinelgate.security.policies import (
     check_prompt_against_policies,
     get_active_policies,
 )
@@ -27,7 +27,7 @@ from security.policies import (
 # Compliance packs are loaded lazily and *only* used to surface a citation
 # alongside an already-made decision. They never independently cause a BLOCK.
 try:
-    from security.compliance_engine import check_compliance, load_compliance_packs
+    from sentinelgate.security.compliance_engine import check_compliance, load_compliance_packs
     _COMPLIANCE_PACKS = load_compliance_packs()
 except Exception:  # pragma: no cover - degrades gracefully if engine absent
     _COMPLIANCE_PACKS = []
@@ -92,7 +92,7 @@ def process_prompt(
     # Step 1 — ingress inspection
     _t0 = time.perf_counter()
     if not prompt:
-        from security.inspector import InspectionResult
+        from sentinelgate.security.inspector import InspectionResult
         inspection = InspectionResult(
             risk_score=1.0,
             intent_label="invalid_input",
@@ -101,7 +101,7 @@ def process_prompt(
             response_flagged=True,
         )
     elif len(prompt) > MAX_PROMPT_CHARS:
-        from security.inspector import InspectionResult
+        from sentinelgate.security.inspector import InspectionResult
         inspection = InspectionResult(
             risk_score=1.0,
             intent_label="input_too_large",

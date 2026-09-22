@@ -229,3 +229,52 @@ Built for **Transforming Enterprise Through AI** at lablab.ai (May 2026). Submit
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+## Deployment Guide for Enterprises
+
+You can deploy SentinelGate as a robust application using Docker, as a standard Python package, or via bash scripts.
+
+### 1. The Fastest Way: Docker (Recommended)
+
+This sets up SentinelGate inside an isolated container with an automatically mapped persistent database volume.
+
+```bash
+# 1. Set your Gemini key (required for full capability; missing key runs in local demo mode)
+export GEMINI_API_KEY=your_gemini_key
+
+# 2. Start the container
+docker-compose -f sentinelgate/docker/docker-compose.yml up --build -d
+
+# 3. Access the dashboard
+# Open http://localhost:8501 in your browser.
+```
+
+### 2. The Native Way: Python Package (pip)
+
+We publish SentinelGate as a standard Python package.
+
+```bash
+# 1. Build and install the package
+pip install .
+
+# 2. Run the SentinelGate CLI
+export GEMINI_API_KEY=your_gemini_key
+sentinelgate start
+```
+
+### 3. The Quick Script Way
+
+For environments where you want to keep the installation local and self-contained without Docker.
+
+```bash
+# 1. Install to a local virtual environment
+./install.sh
+
+# 2. Provide your API key
+export GEMINI_API_KEY=your_gemini_key
+
+# 3. Start the application
+./start.sh
+```
